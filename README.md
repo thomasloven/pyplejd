@@ -6,7 +6,7 @@ Python package for communicating with and controlling [Plejd](https://plejd.com)
 
 Contributors not listed in git history - in no particular order:
 
-- @astrandb
-- @bnordli
-- @oyvindwe
-- @NewsGuyTor
+- [@astrandb](https://github.com/astrandb)
+- [@bnordli](https://github.com/bnordli)
+- [@oyvindwe](https://github.com/oyvindwe)
+- [@NewsGuyTor](https://github.com/NewsGuyTor)
