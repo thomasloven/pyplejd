@@ -1,1 +1,8 @@
-__pycache__/
+/*
+/*/
+!gitignore
+!README.md
+!LICENSE
+!setup.py
+!setup.cfg
+!pyplejd/
