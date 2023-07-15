@@ -4,6 +4,7 @@ Wrapper class for BLEDevice with RSSI from AdvertisementData.
 
 from bleak.backends.device import BLEDevice
 
+
 class BLEDeviceWithRssi:
     def __init__(self, device: BLEDevice, rssi: int):
         self.device = device

@@ -1,4 +1,3 @@
-
 from builtins import property
 from collections import namedtuple
 import logging
@@ -29,13 +28,13 @@ HARDWARE_TYPES = {
     "36": Device("LED-75", LIGHT, True),
 }
 
-class PlejdDevice:
 
+class PlejdDevice:
     def __init__(self, manager, address, BLE_address, data):
         self.manager = manager
         self.address = address
         self._BLE_address = BLE_address
-        self.data = data #{name, hardwareId, dimmable, outputType, room, firmware}
+        self.data = data  # {name, hardwareId, dimmable, outputType, room, firmware}
 
         self.updateCallback = None
 
@@ -43,7 +42,9 @@ class PlejdDevice:
         self._dim = None
 
     def __repr__(self):
-        return f"<PlejdDevice(<manager>, {self.address}, {self.BLE_address}, {self.data}>"
+        return (
+            f"<PlejdDevice(<manager>, {self.address}, {self.BLE_address}, {self.data}>"
+        )
 
     @property
     def available(self):
@@ -55,7 +56,7 @@ class PlejdDevice:
 
     @property
     def dim(self):
-        return self._dim/256 if self._dim else 0
+        return self._dim / 256 if self._dim else 0
 
     @property
     def BLE_address(self):
@@ -64,12 +65,15 @@ class PlejdDevice:
     @property
     def name(self):
         return self.data["name"]
+
     @property
     def room(self):
         return self.data["room"]
+
     @property
     def firmware(self):
         return self.data["firmware"]
+
     @property
     def hardwareId(self):
         return self.data["hardwareId"]
@@ -77,15 +81,17 @@ class PlejdDevice:
     @property
     def type(self):
         return self.data.get("outputType") or self.hardware_data.type
+
     @property
     def model(self):
         return self.hardware_data.model
+
     @property
     def dimmable(self):
         if self.data["dimmable"] is not None:
             return self.data["dimmable"]
         return self.hardware_data.dimmable
-    
+
     @property
     def hardware_data(self):
         deviceType = HARDWARE_TYPES.get(self.data["hardwareId"], HARDWARE_TYPES["0"])
@@ -109,8 +115,8 @@ class PlejdDevice:
     async def turn_off(self):
         await self.manager.mesh.set_state(self.address, False)
 
-class PlejdScene:
 
+class PlejdScene:
     def __init__(self, manager, index, title):
         self._manager = manager
         self._index = index

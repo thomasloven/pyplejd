@@ -11,13 +11,13 @@ from .const import PLEJD_SERVICE, LIGHT, SWITCH
 
 _LOGGER = logging.getLogger(__name__)
 
-class PlejdManager:
 
+class PlejdManager:
     def __init__(self, credentials):
         self.credentials = credentials
         self.mesh = PlejdMesh()
         self.mesh.statecallback = self._update_device
-        self.devices = { }
+        self.devices = {}
         self.scenes = []
 
     def add_mesh_device(self, device, rssi):
@@ -41,7 +41,7 @@ class PlejdManager:
 
     async def get_devices(self):
         devices = await get_devices(**self.credentials)
-        self.devices = {k: PlejdDevice(self, **v) for (k,v) in devices.items()}
+        self.devices = {k: PlejdDevice(self, **v) for (k, v) in devices.items()}
         _LOGGER.debug("Devices")
         _LOGGER.debug(self.devices)
         return self.devices
@@ -56,7 +56,9 @@ class PlejdManager:
     async def _update_device(self, deviceState):
         address = deviceState["address"]
         if address in self.devices:
-            await self.devices[address].new_state(deviceState.get("state"), deviceState.get("dim", 0))
+            await self.devices[address].new_state(
+                deviceState.get("state"), deviceState.get("dim", 0)
+            )
 
     @property
     def keepalive_interval(self):

@@ -10,3 +10,13 @@ Contributors not listed in git history - in no particular order:
 - [@bnordli](https://github.com/bnordli)
 - [@oyvindwe](https://github.com/oyvindwe)
 - [@NewsGuyTor](https://github.com/NewsGuyTor)
+
+---
+
+Notes for my memory:
+
+```
+> python setup.py sdist
+> pip install twine
+> twine upload dist/\*
+```

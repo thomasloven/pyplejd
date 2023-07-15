@@ -14,8 +14,8 @@ from .crypto import auth_response, encrypt_decrypt
 
 _LOGGER = logging.getLogger(__name__)
 
-class PlejdMesh():
 
+class PlejdMesh:
     def __init__(self):
         self._connected = False
         self.client = None
@@ -23,7 +23,7 @@ class PlejdMesh():
         self.crypto_key = None
         self.mesh_nodes = []
 
-        self.pollonWrite = True # TODO: Deprecate this
+        self.pollonWrite = True  # TODO: Deprecate this
         self.statecallback = None
         self.scenecallback = None
         self.buttoncallback = None
@@ -56,24 +56,27 @@ class PlejdMesh():
                 pass
             self._connected = False
             self.client = None
-    
+
     async def connect(self, disconnect_callback=None, key=None):
         await self.disconnect()
         _LOGGER.debug("Trying to connect to mesh")
 
         def _disconnect(arg):
-            if not self.connected: return
+            if not self.connected:
+                return
             _LOGGER.debug("_disconnect %s", arg)
             self.client = None
             self._connected = False
             if disconnect_callback:
                 disconnect_callback()
 
-        self.mesh_nodes.sort(key = lambda a: a.rssi, reverse = True)
+        self.mesh_nodes.sort(key=lambda a: a.rssi, reverse=True)
         for plejd in self.mesh_nodes:
             try:
                 _LOGGER.debug("Connecting to %s", plejd)
-                client = await establish_connection(BleakClient, plejd.device, "plejd", _disconnect)
+                client = await establish_connection(
+                    BleakClient, plejd.device, "plejd", _disconnect
+                )
                 address = plejd.device.address
                 self._connected = True
                 self.client = client
@@ -92,7 +95,9 @@ class PlejdMesh():
                 _LOGGER.warning("Failed to connect to plejd mesh - %s", self.mesh_nodes)
             return False
 
-        self.connected_node = binascii.a2b_hex(address.replace(":", "").replace("-", ""))[::-1]
+        self.connected_node = binascii.a2b_hex(
+            address.replace(":", "").replace("-", "")
+        )[::-1]
 
         async def _lastdata(_, lastdata):
             self.pollonWrite = False
@@ -112,7 +117,7 @@ class PlejdMesh():
         async def _lightlevel(_, lightlevel):
             _LOGGER.debug("Received LightLevel %s", lightlevel.hex())
             for i in range(0, len(lightlevel), 10):
-                ll = lightlevel[i:i+10]
+                ll = lightlevel[i : i + 10]
                 deviceState = {
                     "address": int(ll[0]),
                     "state": bool(ll[1]),
@@ -124,7 +129,7 @@ class PlejdMesh():
 
         await client.start_notify(PLEJD_LASTDATA, _lastdata)
         await client.start_notify(PLEJD_LIGHTLEVEL, _lightlevel)
-        
+
         await self.poll()
 
         return True
@@ -158,7 +163,7 @@ class PlejdMesh():
     async def ping(self):
         async with self._ble_lock:
             return await self._ping()
-                
+
     async def _ping(self):
         if self.client is None:
             return False
@@ -227,7 +232,7 @@ def decode_state(data):
 
     if cmd == b"\x00\xc8" or cmd == b"\x00\x98":
         retval["state"] = bool(data[5])
-        retval["dim"] = int.from_bytes(data[6:8], "little")        
+        retval["dim"] = int.from_bytes(data[6:8], "little")
     elif cmd == b"\x00\x97":
         retval["state"] = bool(data[5])
     elif cmd == b"\x00\x16":
