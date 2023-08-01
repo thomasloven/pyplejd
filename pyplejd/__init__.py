@@ -3,13 +3,16 @@ from datetime import timedelta
 
 from bleak_retry_connector import close_stale_connections
 
-from .mesh import PlejdMesh
-from .api import get_cryptokey, get_devices, get_site_data, get_scenes
-from .plejd_device import PlejdDevice, PlejdScene
+from .ble.mesh import PlejdMesh
+from .cloud import PlejdCloudSite
+
+# from .plejd_device import PlejdDevice, PlejdScene
 
 from .const import PLEJD_SERVICE, LIGHT, SWITCH
 
 _LOGGER = logging.getLogger(__name__)
+
+get_sites = PlejdCloudSite.get_sites
 
 
 class PlejdManager:
@@ -17,8 +20,28 @@ class PlejdManager:
         self.credentials = credentials
         self.mesh = PlejdMesh()
         self.mesh.statecallback = self._update_device
-        self.devices = {}
+        self.devices = []
         self.scenes = []
+        self.cloud = PlejdCloudSite(**credentials)
+
+    async def init(self):
+        await self.cloud.ensure_details_loaded()
+
+        self.devices = self.cloud.devices
+        for d in self.devices:
+            d.connect_mesh(self.mesh)
+
+        self.scenes = self.cloud.scenes
+        for s in self.scenes:
+            s.connect_mesh(self.mesh)
+
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            _LOGGER.debug("Devices:")
+            for d in self.devices:
+                _LOGGER.debug(d)
+            _LOGGER.debug("Scenes:")
+            for s in self.scenes:
+                _LOGGER.debug(s)
 
     def add_mesh_device(self, device, rssi):
         _LOGGER.debug("Adding plejd %s", device)
@@ -37,39 +60,25 @@ class PlejdManager:
         return self.mesh is not None and self.mesh.connected
 
     async def get_site_data(self):
-        return await get_site_data(**self.credentials)
-
-    async def get_devices(self):
-        devices = await get_devices(**self.credentials)
-        self.devices = {k: PlejdDevice(self, **v) for (k, v) in devices.items()}
-        _LOGGER.debug("Devices")
-        _LOGGER.debug(self.devices)
-        return self.devices
-
-    async def get_scenes(self):
-        scenes = await get_scenes(**self.credentials)
-        self.scenes = [PlejdScene(self, **s) for s in scenes]
-        _LOGGER.debug("Scenes")
-        _LOGGER.debug(self.scenes)
-        return self.scenes
+        await self.cloud.ensure_details_loaded()
+        return self.cloud.details
 
     async def _update_device(self, deviceState):
-        address = deviceState["address"]
-        if address in self.devices:
-            await self.devices[address].new_state(
-                deviceState.get("state"), deviceState.get("dim", 0)
-            )
+        _LOGGER.debug("New data:")
+        _LOGGER.debug(deviceState)
+
+        for d in self.devices:
+            if d.address == deviceState["address"]:
+                await d.update_state(**deviceState)
 
     @property
     def keepalive_interval(self):
-        if self.mesh.pollonWrite:
-            return timedelta(seconds=10)
-        else:
-            return timedelta(minutes=10)
+        return timedelta(minutes=10)
 
     async def keepalive(self):
+        await self.cloud.ensure_details_loaded()
         if self.mesh.crypto_key is None:
-            self.mesh.set_crypto_key(await get_cryptokey(**self.credentials))
+            self.mesh.set_crypto_key(self.cloud.cryptokey)
         if not self.mesh.connected:
             if not await self.mesh.connect():
                 return False

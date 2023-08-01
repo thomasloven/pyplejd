@@ -9,7 +9,7 @@ from bleak_retry_connector import establish_connection
 from bleak.backends.device import BLEDevice
 
 from .ble_device import BLEDeviceWithRssi
-from .const import PLEJD_AUTH, PLEJD_LASTDATA, PLEJD_LIGHTLEVEL, PLEJD_PING, PLEJD_DATA
+from ..const import PLEJD_AUTH, PLEJD_LASTDATA, PLEJD_LIGHTLEVEL, PLEJD_PING, PLEJD_DATA
 from .crypto import auth_response, encrypt_decrypt
 
 _LOGGER = logging.getLogger(__name__)
@@ -93,6 +93,7 @@ class PlejdMesh:
                 _LOGGER.debug("Failed to connect to plejd mesh - no devices discovered")
             else:
                 _LOGGER.warning("Failed to connect to plejd mesh - %s", self.mesh_nodes)
+            self._connected = False
             return False
 
         self.connected_node = binascii.a2b_hex(

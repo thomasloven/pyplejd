@@ -14,7 +14,7 @@ setup(
     license="MIT",
     url="https://github.com/thomasloven/pyplejd",
     download_url=f"https://github.com/thomasloven/pyplejd/archive/v{VERSION}.tar.gz",
-    install_requires=["aiohttp", "bleak", "bleak_retry_connector"],
+    install_requires=["aiohttp", "bleak", "bleak_retry_connector", "pydantic"],
     keywords=["plejd", "bluetooth", "homeassistant"],
     python_requires=f">={MIN_PY_VERSION}",
 )
