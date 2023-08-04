@@ -3,7 +3,7 @@ from typing import Literal, TYPE_CHECKING
 import logging
 
 if TYPE_CHECKING:
-    from .ble.mesh import PlejdMesh
+    from .ble import PlejdMesh
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ class PlejdDevice(BaseModel):
 
         return remover
 
-    async def update_state(self, state=None, dim=None, available=True, **_):
+    def update_state(self, state=None, dim=None, available=True, **_):
         update = False
         if state is not None and state != self._state:
             self._state = state
@@ -76,6 +76,8 @@ class PlejdDevice(BaseModel):
                 )
 
     async def turn_on(self, dim=0):
+        if dim is not None:
+            dim = dim << 8 | dim
         await self._mesh.set_state(self.address, True, dim)
 
     async def turn_off(self):

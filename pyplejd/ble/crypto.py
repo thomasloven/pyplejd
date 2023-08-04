@@ -1,3 +1,4 @@
+import binascii
 import hashlib
 import struct
 
@@ -5,7 +6,10 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 
 
-def encrypt_decrypt(key, addr, data):
+def encrypt_decrypt(key: str, addr: str, data: bytearray) -> bytearray:
+    key = binascii.a2b_hex(key.replace("-", ""))
+    addr = binascii.a2b_hex(addr.replace("-", "").replace(":", ""))[::-1]
+
     buf = addr + addr + addr[:4]
 
     ct = Cipher(algorithms.AES(bytearray(key)), modes.ECB(), backend=default_backend())
@@ -18,7 +22,9 @@ def encrypt_decrypt(key, addr, data):
     return output
 
 
-def auth_response(key, challenge):
+def auth_response(key: str, challenge: bytearray) -> bytearray:
+    key = binascii.a2b_hex(key.replace("-", ""))
+
     k = int.from_bytes(key, "big")
     c = int.from_bytes(challenge, "big")
     intermediate = hashlib.sha256((k ^ c).to_bytes(16, "big")).digest()
