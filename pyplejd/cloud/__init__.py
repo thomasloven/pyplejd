@@ -70,11 +70,10 @@ class PlejdCloudSite:
             self._details_raw = data["result"][0]
             self.details = SiteDetails(**data["result"][0])
 
-    async def ensure_details_loaded(self):
-        if self.details is None:
-            await self.get_details()
-            _LOGGER.debug("Site data loaded")
-            _LOGGER.debug(("Mesh Devices:", self.mesh_devices))
+    async def load_site_details(self):
+        await self.get_details()
+        _LOGGER.debug("Site data loaded")
+        _LOGGER.debug(("Mesh Devices:", self.mesh_devices))
 
     @classmethod
     async def create(cls, username, password, siteId):

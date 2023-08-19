@@ -1,5 +1,7 @@
+from __future__ import annotations
 import logging
 from datetime import timedelta
+from typing import TYPE_CHECKING
 
 from bleak_retry_connector import close_stale_connections
 
@@ -7,6 +9,9 @@ from .ble import PlejdMesh
 from .cloud import PlejdCloudSite
 
 from .const import PLEJD_SERVICE, LIGHT, SENSOR, SWITCH, UNKNOWN
+
+if TYPE_CHECKING:
+    from .interface import PlejdDevice, PlejdScene
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,15 +32,18 @@ class PlejdManager:
     def __init__(self, credentials):
         self.credentials = credentials
         self.mesh = PlejdMesh()
-        self.devices = []
-        self.scenes = []
+        self.devices: list[PlejdDevice] = []
+        self.scenes: list[PlejdScene] = []
         self.cloud = PlejdCloudSite(**credentials)
 
     async def init(self):
-        await self.cloud.ensure_details_loaded()
+        await self.cloud.load_site_details()
 
         self.mesh.set_key(self.cloud.cryptokey)
+        self.mesh.subscribe_connect(self._update_connected)
         self.mesh.subscribe_state(self._update_device)
+        self.mesh.subscribe_scene(self._update_scene)
+        self.mesh.subscribe_button(self._update_button)
 
         self.devices = self.cloud.devices
         for d in self.devices:
@@ -55,11 +63,9 @@ class PlejdManager:
                 _LOGGER.debug(s)
 
     def add_mesh_device(self, device, rssi):
-        _LOGGER.debug("Saw plejd device %s", device)
         return self.mesh.see_device(device, rssi)
 
     async def close_stale(self, device):
-        _LOGGER.debug("Closing stale connections for %s", device)
         await close_stale_connections(device)
 
     @property
@@ -70,12 +76,24 @@ class PlejdManager:
     def site_data(self):
         return self.cloud.details
 
-    def _update_device(self, deviceState):
-        _LOGGER.debug("New data: %s", deviceState)
-
+    def _update_connected(self, state):
         for d in self.devices:
-            if d.address == deviceState["address"]:
-                d.update_state(**deviceState)
+            d.update_state(available=state["connected"])
+
+    def _update_device(self, state):
+        for d in self.devices:
+            if d.address == state["address"]:
+                d.update_state(**state)
+
+    def _update_scene(self, state):
+        for s in self.scenes:
+            if s.index == state["scene"]:
+                s.activated()
+
+    def _update_button(self, state):
+        for d in self.devices:
+            if d.address == state["address"]:
+                d.trigger_event(state)
 
     @property
     def ping_interval(self):
@@ -86,5 +104,4 @@ class PlejdManager:
         return retval
 
     async def disconnect(self):
-        _LOGGER.debug("DISCONNECT")
         await self.mesh.disconnect()
