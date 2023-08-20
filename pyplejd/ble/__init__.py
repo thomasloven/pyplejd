@@ -2,7 +2,9 @@ import asyncio
 import binascii
 import logging
 import os
+from datetime import datetime, timedelta
 from typing import Callable
+import time
 
 from bleak import BleakClient, BleakError
 from bleak.backends.device import BLEDevice
@@ -18,6 +20,7 @@ class PlejdMesh:
     def __init__(self):
         self._seen_nodes: dict[BLEDevice, int] = {}
         self._expected_nodes = set()
+        self._connectable_nodes = set()
         self._gateway_node = None
         self._crypto_key: bytearray = None
         self._client: BleakClient = None
@@ -33,8 +36,10 @@ class PlejdMesh:
     def connected(self):
         return self._client is not None
 
-    def expect_device(self, BLEaddress: str):
+    def expect_device(self, BLEaddress: str, connectable=True):
         self._expected_nodes.add(BLEaddress.upper())
+        if connectable:
+            self._connectable_nodes.add(BLEaddress.upper())
 
     def see_device(self, node: BLEDevice, rssi: int):
         self._seen_nodes[node] = rssi
@@ -97,14 +102,14 @@ class PlejdMesh:
         sorted_nodes = {
             node: rssi
             for node, rssi in sorted_nodes.items()
-            if node.address.replace(":", "").upper() in self._expected_nodes
+            if node.address.replace(":", "").upper() in self._connectable_nodes
         }
 
         if not sorted_nodes:
             _LOGGER.debug(
                 "Failed to connect to plejd mesh - No valid devices: %s (%s)",
                 self._seen_nodes,
-                self._expected_nodes,
+                self._connectable_nodes,
             )
             return False
         client = None
@@ -173,6 +178,27 @@ class PlejdMesh:
         payload = binascii.a2b_hex(f"0201100021{index:02x}")
         return await self._write(payload)
 
+    async def poll_time(self, address: int):
+        payload = binascii.a2b_hex(f"{address:02x}0102001b")
+        await self._write(payload)
+
+        retval = await self._client.read_gatt_char(PLEJD_LASTDATA)
+        data = encrypt_decrypt(self._crypto_key, self._gateway_node, retval)
+        ts = int.from_bytes(data[5:9], "little")
+        dt = datetime.fromtimestamp(ts)
+
+        now = datetime.now() + timedelta(seconds=3600 * time.daylight)
+        if abs(dt - now) > timedelta(seconds=60):
+            _LOGGER.debug(f"Device {address} repported the wrong time {dt} ({now=})")
+            return True
+        return False
+
+    async def broadcast_time(self):
+        now = datetime.now() + timedelta(seconds=3600 * time.daylight)
+        now_bytes = int(now.timestamp()).to_bytes(5, "little")
+        payload = binascii.a2b_hex(f"000110001b{now_bytes.hex()}")
+        await self._write(payload)
+
     async def _write(self, payload):
         client = self._client
         if client is None:
@@ -236,12 +262,10 @@ class PlejdMesh:
             pass
 
         if address == 1 and cmd == b"\x00\x1b":
-            _LOGGER.debug("Got time data")
-            # Ignored. Consider adding ability to send time data periodically instead
-            # ts = struct.unpack_from("<1", data, 5)[0]
-            # Is this the same thing?
-            # ts2 = int.from_bytes(data[6:8], "little")
-            # dt = datetime.fromtimestamp(ts)
+            _LOGGER.warning("Got time data")
+            # Only received if the mesh is already keeping time
+            # ts2 = int.from_bytes(data[5:9], "little")
+            # dt = datetime.fromtimestamp(ts2)
             return
 
         if address == 2:

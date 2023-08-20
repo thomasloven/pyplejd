@@ -63,7 +63,7 @@ class DEVICES:
         WPH_01: SENSOR,  # button
         REL_01: SWITCH,
         SPR_01: SWITCH,
-        WRT_01: SWITCH,
+        WRT_01: SENSOR,
         DIM_01_2P: LIGHT,
         GENERIC: LIGHT,
         DIM_01_LC: LIGHT,

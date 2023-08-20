@@ -47,7 +47,7 @@ class PlejdManager:
 
         self.devices = self.cloud.devices
         for d in self.devices:
-            self.mesh.expect_device(d.BLEaddress)
+            self.mesh.expect_device(d.BLEaddress, d.outputType in [LIGHT, SWITCH])
             d.connect_mesh(self.mesh)
 
         self.scenes = self.cloud.scenes
@@ -102,6 +102,13 @@ class PlejdManager:
     async def ping(self):
         retval = await self.mesh.ping()
         return retval
+
+    async def broadcast_time(self):
+        for d in self.devices:
+            if d.outputType in [LIGHT, SWITCH]:
+                if await self.mesh.poll_time(d.address):
+                    await self.mesh.broadcast_time()
+                    return
 
     async def disconnect(self):
         await self.mesh.disconnect()
