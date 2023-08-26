@@ -75,6 +75,10 @@ class PlejdCloudSite:
         _LOGGER.debug("Site data loaded")
         _LOGGER.debug(("Mesh Devices:", self.mesh_devices))
 
+    async def get_raw_details(self):
+        await self.get_details()
+        return self._details_raw
+
     @classmethod
     async def create(cls, username, password, siteId):
         self = PlejdCloudSite(username, password, siteId)
@@ -123,7 +127,7 @@ class PlejdCloudSite:
                     if outputs:
                         address = outputs[str(outputSettings.output)]
                 if outputSettings.dimCurve is not None:
-                    if outputSettings.dimCurve not in ["nonDimmable", "RelayNormal"]:
+                    if outputSettings.dimCurve not in ["NonDimmable", "RelayNormal"]:
                         dimmable = True
                     else:
                         dimmable = False

@@ -76,6 +76,9 @@ class PlejdManager:
     def site_data(self):
         return self.cloud.details
 
+    async def get_raw_sitedata(self):
+        return await self.cloud.get_raw_details()
+
     def _update_connected(self, state):
         for d in self.devices:
             d.update_state(available=state["connected"])
