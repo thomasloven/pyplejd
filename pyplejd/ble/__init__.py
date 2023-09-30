@@ -262,11 +262,11 @@ class PlejdMesh:
             pass
 
         if address == 1 and cmd == b"\x00\x1b":
-            _LOGGER.warning("Got time data")
+            # _LOGGER.warning("Got time data")
             # Only received if the mesh is already keeping time
             # ts2 = int.from_bytes(data[5:9], "little")
             # dt = datetime.fromtimestamp(ts2)
-            return
+            pass
 
         if address == 2:
             # Scene update
