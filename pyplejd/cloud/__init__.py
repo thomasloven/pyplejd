@@ -145,7 +145,7 @@ class PlejdCloudSite:
             if plejdDevice is None:
                 continue
             hardware = const.DEVICES.HARDWARE_ID.get(
-                plejdDevice.hardwareId, "-unknown-"
+                plejdDevice.hardwareId, f"-unknown- ({plejdDevice.hardwareId})"
             )
             firmware = plejdDevice.firmware.version
             room = next((r for r in details.rooms if r.roomId == device.roomId), None)

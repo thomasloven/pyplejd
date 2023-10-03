@@ -30,7 +30,9 @@ class DEVICES:
     REL_01_2P = "REL-01-2P"
     REL_02 = "REL-02"
     SPR_01 = "SPR-01"
-    LED_75 = "LED_75"
+    LED_75 = "LED-75"
+    DWN_01 = "DWN-01"
+    DWN_02 = "DWN-02"
 
     HARDWARE_ID = {
         "0": UNKNOWN_TYPE,
@@ -51,6 +53,8 @@ class DEVICES:
         "18": REL_02,
         "20": SPR_01,
         "36": LED_75,
+        "XXX": DWN_01,
+        "199": DWN_02,
     }
 
     HARDWARE_TYPE = {
@@ -72,6 +76,18 @@ class DEVICES:
         REL_02: SWITCH,
         SPR_01: SWITCH,
         LED_75: LIGHT,
+        DWN_01: LIGHT,
+        DWN_02: LIGHT,
     }
 
-    DIMMABLE = [DIM_01, DIM_02, LED_10, DIM_01_2P, DIM_01_LC, DIM_02_LC, LED_75]
+    DIMMABLE = [
+        DIM_01,
+        DIM_02,
+        LED_10,
+        DIM_01_2P,
+        DIM_01_LC,
+        DIM_02_LC,
+        LED_75,
+        DWN_01,
+        DWN_02,
+    ]
