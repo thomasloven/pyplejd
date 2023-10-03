@@ -1,5 +1,9 @@
 from __future__ import annotations
-from pydantic import BaseModel, PrivateAttr
+
+try:
+    from pydantic.v1 import BaseModel, PrivateAttr
+except ImportError:
+    from pydantic import BaseModel, PrivateAttr
 from typing import Literal, TYPE_CHECKING, Callable
 import logging
 
