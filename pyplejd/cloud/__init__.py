@@ -110,9 +110,27 @@ class PlejdCloudSite:
             objectId = device.objectId
             deviceId = device.deviceId
             address = details.deviceAddress[deviceId]
-            dimmable = None
             outputType = device.outputType
             inputAddress = []
+
+            plejdDevice = next(
+                (d for d in details.plejdDevices if d.deviceId == deviceId), None
+            )
+            if plejdDevice is None:
+                continue
+            hardware = const.HARDWARE.get(plejdDevice.hardwareId, "0")
+
+            hardware_name = hardware.name
+            if hardware.type == const.UNKNOWN:
+                hardware_name += f" ({plejdDevice.hardwareId})"
+
+            dimmable = hardware.dimmable
+            colortemp = hardware.colortemp
+
+            if outputType is None:
+                outputType = hardware.type
+
+            firmware = plejdDevice.firmware.version
 
             outputSettings = next(
                 (s for s in details.outputSettings if s.deviceParseId == objectId),
@@ -139,24 +157,9 @@ class PlejdCloudSite:
                     if inputs:
                         inputAddress.append(inputs[str(inpt.input)])
 
-            plejdDevice = next(
-                (d for d in details.plejdDevices if d.deviceId == deviceId), None
-            )
-            if plejdDevice is None:
-                continue
-            hardware = const.DEVICES.HARDWARE_ID.get(
-                plejdDevice.hardwareId, f"-unknown- ({plejdDevice.hardwareId})"
-            )
-            firmware = plejdDevice.firmware.version
             room = next((r for r in details.rooms if r.roomId == device.roomId), None)
             if room is not None:
                 room = room.title
-
-            if dimmable is None:
-                dimmable = hardware in const.DEVICES.DIMMABLE
-
-            if outputType is None:
-                outputType = const.DEVICES.HARDWARE_TYPE[hardware]
 
             retval.append(
                 PlejdDevice(
@@ -165,11 +168,12 @@ class PlejdCloudSite:
                     address=address,
                     inputAddress=inputAddress,
                     name=device.title,
-                    hardware=hardware,
+                    hardware=hardware_name,
                     firmware=firmware,
                     outputType=outputType,
                     room=room,
                     dimmable=dimmable,
+                    colortemp=colortemp,
                 )
             )
         return retval

@@ -12,82 +12,33 @@ SWITCH = "RELAY"
 UNKNOWN = "UNKNOWN"
 
 
-class DEVICES:
-    UNKNOWN_TYPE = "-unknown-"
-    DIM_01 = "DIM-01"
-    DIM_02 = "DIM-02"
-    CTR_01 = "CTR-01"
-    GWY_01 = "GWY-01"
-    LED_10 = "LED-10"
-    WPH_01 = "WPH-01"
-    REL_01 = "REL-01"
-    SPR_01 = "SPR-01"
-    WRT_01 = "WRT-01"
-    DIM_01_2P = "DIM-01-2P"
-    GENERIC = "Generic"
-    DIM_01_LC = "DIM-01-LC"
-    DIM_02_LC = "DIM-02-LC"
-    REL_01_2P = "REL-01-2P"
-    REL_02 = "REL-02"
-    SPR_01 = "SPR-01"
-    LED_75 = "LED-75"
-    DWN_01 = "DWN-01"
-    DWN_02 = "DWN-02"
+class Device:
+    def __init__(self, name, type, dimmable=False, colortemp=False):
+        self.name = name
+        self.type = type
+        self.dimmable = dimmable
+        self.colortemp = colortemp
 
-    HARDWARE_ID = {
-        "0": UNKNOWN_TYPE,
-        "1": DIM_01,
-        "2": DIM_02,
-        "3": CTR_01,
-        "4": GWY_01,
-        "5": LED_10,
-        "6": WPH_01,
-        "7": REL_01,
-        "8": SPR_01,
-        "10": WRT_01,
-        "11": DIM_01_2P,
-        "13": GENERIC,
-        "14": DIM_01_LC,
-        "15": DIM_02_LC,
-        "17": REL_01_2P,
-        "18": REL_02,
-        "20": SPR_01,
-        "36": LED_75,
-        "XXX": DWN_01,
-        "199": DWN_02,
-    }
 
-    HARDWARE_TYPE = {
-        UNKNOWN_TYPE: UNKNOWN,
-        DIM_01: LIGHT,
-        DIM_02: LIGHT,
-        CTR_01: LIGHT,
-        GWY_01: UNKNOWN,
-        LED_10: LIGHT,
-        WPH_01: SENSOR,  # button
-        REL_01: SWITCH,
-        SPR_01: SWITCH,
-        WRT_01: SENSOR,
-        DIM_01_2P: LIGHT,
-        GENERIC: LIGHT,
-        DIM_01_LC: LIGHT,
-        DIM_02_LC: LIGHT,
-        REL_01_2P: SWITCH,
-        REL_02: SWITCH,
-        SPR_01: SWITCH,
-        LED_75: LIGHT,
-        DWN_01: LIGHT,
-        DWN_02: LIGHT,
-    }
-
-    DIMMABLE = [
-        DIM_01,
-        DIM_02,
-        LED_10,
-        DIM_01_2P,
-        DIM_01_LC,
-        DIM_02_LC,
-        LED_75,
-        DWN_01,
-        DWN_02,
-    ]
+HARDWARE = {
+    "0": Device("-unknown-", UNKNOWN),
+    "1": Device("DIM-01", LIGHT, dimmable=True),
+    "2": Device("DIM-02", LIGHT, dimmable=True),
+    "3": Device("CTR-01", LIGHT),
+    "4": Device("GWY-01", UNKNOWN),
+    "5": Device("LED-10", LIGHT, dimmable=True),
+    "6": Device("WPH-01", SENSOR),
+    "7": Device("REL-01", SWITCH),
+    "8": Device("SPR-01", SWITCH),
+    "10": Device("WRT-01", LIGHT),
+    "11": Device("DIM-01-2P", LIGHT, dimmable=True),
+    "13": Device("Generic", LIGHT),
+    "14": Device("DIM-01-LC", LIGHT, dimmable=True),
+    "15": Device("DIM-02-LC", LIGHT, dimmable=True),
+    "17": Device("REL-01-2P", SWITCH),
+    "18": Device("REL-02", SWITCH),
+    "20": Device("SPR-01", SWITCH),
+    "36": Device("LED-75", LIGHT, dimmable=True),
+    "167": Device("DWN-01", LIGHT, dimmable=True, colortemp=True),
+    "199": Device("DWN-02", LIGHT, dimmable=True, colortemp=True),
+}
