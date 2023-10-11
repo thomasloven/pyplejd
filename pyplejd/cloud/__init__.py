@@ -118,10 +118,12 @@ class PlejdCloudSite:
             )
             if plejdDevice is None:
                 continue
-            hardware = const.HARDWARE.get(plejdDevice.hardwareId, "0")
+            hardware = const.HARDWARE.get(
+                plejdDevice.hardwareId, const.HARDWARE_UNKNOWN
+            )
 
             hardware_name = hardware.name
-            if hardware.type == const.UNKNOWN:
+            if hardware is const.HARDWARE_UNKNOWN:
                 hardware_name += f" ({plejdDevice.hardwareId})"
 
             dimmable = hardware.dimmable

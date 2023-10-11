@@ -42,3 +42,5 @@ HARDWARE = {
     "167": Device("DWN-01", LIGHT, dimmable=True, colortemp=True),
     "199": Device("DWN-02", LIGHT, dimmable=True, colortemp=True),
 }
+
+HARDWARE_UNKNOWN = HARDWARE["0"]
