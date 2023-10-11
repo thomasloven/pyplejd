@@ -277,6 +277,7 @@ class PlejdMesh:
                 state = bool(data[5])
                 dim = int.from_bytes(data[6:8], "little")
                 _LOGGER.debug("Address: %s, state: %s, dim: %s", address, state, dim)
+                _LOGGER.debug("DIM Message: %s", data)
                 self._publish(
                     self._state_listeners,
                     {
@@ -307,7 +308,6 @@ class PlejdMesh:
                     },
                 )
             case b"\x00\x21":
-                _LOGGER.debug("Scene triggered")
                 scene = int(data[5])
                 _LOGGER.debug("Scene: %s", scene)
                 self._publish(
@@ -316,6 +316,8 @@ class PlejdMesh:
                         "scene": scene,
                     },
                 )
+            case _:
+                _LOGGER.debug("Unknown cmd (%s) to %s: %s", cmd, address, data[5:])
 
     def _parse_lightlevel(self, lightlevel: bytearray):
         _LOGGER.debug("Parsing LIGHTLEVEL: %s", lightlevel.hex())
@@ -325,6 +327,7 @@ class PlejdMesh:
             state = bool(ll[1])
             dim = int.from_bytes(ll[5:7], "little")
             _LOGGER.debug("Address: %s, state: %s, dim: %s", address, state, dim)
+            _LOGGER.debug("LL message: %s", ll)
             self._publish(
                 self._state_listeners,
                 {
