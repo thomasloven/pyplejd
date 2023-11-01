@@ -106,6 +106,7 @@ class PlejdScene(BaseModel):
     sceneId: str
     index: int
     title: str
+    hidden: bool
 
     _mesh: "PlejdMesh" = PrivateAttr()
     _listeners: set = PrivateAttr()

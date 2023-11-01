@@ -187,11 +187,12 @@ class PlejdCloudSite:
         retval = []
         details = self.details
         for scene in details.scenes:
-            if scene.hiddenFromSceneList:
-                continue
+            hidden = scene.hiddenFromSceneList
             sceneId = scene.sceneId
             title = scene.title
             index = details.sceneIndex.get(sceneId, -1)
-            retval.append(PlejdScene(sceneId=sceneId, title=title, index=index))
+            retval.append(
+                PlejdScene(sceneId=sceneId, title=title, index=index, hidden=hidden)
+            )
 
         return retval

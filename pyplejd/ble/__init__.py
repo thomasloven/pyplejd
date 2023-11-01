@@ -276,7 +276,15 @@ class PlejdMesh:
             case b"\x00\xc8" | b"\x00\x98":
                 state = bool(data[5])
                 dim = int.from_bytes(data[6:8], "little")
-                _LOGGER.debug("Address: %s, state: %s, dim: %s", address, state, dim)
+                extra_data = data[8:]
+                _LOGGER.debug(
+                    "Address: %s, state: %s, dim: %s, data: %s (%s)",
+                    address,
+                    state,
+                    dim,
+                    extra_data,
+                    int.from_bytes(extra_data, "little"),
+                )
                 _LOGGER.debug("DIM Message: %s", data)
                 self._publish(
                     self._state_listeners,
