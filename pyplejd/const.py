@@ -37,6 +37,7 @@ HARDWARE = {
     "15": Device("DIM-02-LC", LIGHT, dimmable=True),
     "17": Device("REL-01-2P", SWITCH),
     "18": Device("REL-02", SWITCH),
+    "19": Device("EXT-01", UNKNOWN),
     "20": Device("SPR-01", SWITCH),
     "36": Device("LED-75", LIGHT, dimmable=True),
     "167": Device("DWN-01", LIGHT, dimmable=True, colortemp=True),
