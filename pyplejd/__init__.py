@@ -85,7 +85,7 @@ class PlejdManager:
 
     def _update_device(self, state):
         for d in self.devices:
-            if d.address == state["address"]:
+            if d.address == state["address"] or d.rxaddress == state["address"]:
                 d.update_state(**state)
 
     def _update_scene(self, state):

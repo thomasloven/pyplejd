@@ -110,6 +110,7 @@ class PlejdCloudSite:
             objectId = device.objectId
             deviceId = device.deviceId
             address = details.deviceAddress[deviceId]
+            rxaddress = None
             outputType = device.outputType
             inputAddress = []
 
@@ -146,11 +147,20 @@ class PlejdCloudSite:
                     outputs = details.outputAddress.get(deviceId)
                     if outputs:
                         address = outputs[str(outputSettings.output)]
+                    if rxaddr := details.rxAddress.get(deviceId):
+                        rxaddress = rxaddr[str(outputSettings.output)]
                 if outputSettings.dimCurve is not None:
                     if outputSettings.dimCurve not in ["NonDimmable", "RelayNormal"]:
                         dimmable = True
+                    elif outputSettings.predefinedLoad is not None and outputSettings.predefinedLoad.loadType == "DWN":
+                        dimmable = True
                     else:
                         dimmable = False
+                colortemp = False
+                if (ct := outputSettings.colorTemperature) is not None:
+                    if ct.behavior == "adjustable":
+                        colortemp = [ct.minTemperature, ct.maxTemperature]
+
 
             inputSettings = (s for s in details.inputSettings if s.deviceId == deviceId)
             for inpt in inputSettings:
@@ -168,6 +178,7 @@ class PlejdCloudSite:
                     objectId=objectId,
                     BLEaddress=deviceId,
                     address=address,
+                    rxaddress=rxaddress,
                     inputAddress=inputAddress,
                     name=device.title,
                     hardware=hardware_name,

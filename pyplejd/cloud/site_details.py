@@ -134,6 +134,14 @@ class PredefinedLoad(PlejdObject):
     # defaultDimCurve: dict
     # allowedDimCurves: dict
 
+class ColorTemperature(BaseModel):
+    minTemperature: int
+    maxTemperature: int
+    # slewRate: int
+    # minTemperatureLimit: int
+    # maxTemperatureLimit: int
+    behavior: str
+    # startTemperature: int
 
 class PlejdDeviceOutputSetting(PlejdObject):
     deviceId: str
@@ -151,6 +159,7 @@ class PlejdDeviceOutputSetting(PlejdObject):
     # curveSinusCompensation: int
     # bootState: str
     predefinedLoad: PredefinedLoad | None = None
+    colorTemperature: ColorTemperature | None = None
     # minimumRelayOffTime: int = None
 
 
@@ -191,7 +200,7 @@ class SiteDetails(BaseModel):
     inputSettings: list[PlejdDeviceInputSetting]
     outputSettings: list[PlejdDeviceOutputSetting]
     motionSensors: list
-    # rxAddress: dict
+    rxAddress: dict[str, dict[str, int]]|None
     # stateTimers: dict
     # sitePermission: SitePermission
     inputAddress: dict[str, dict[str, int]]

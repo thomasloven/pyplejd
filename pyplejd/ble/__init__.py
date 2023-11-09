@@ -163,7 +163,7 @@ class PlejdMesh:
                 return True
         return False
 
-    async def set_state(self, address: int, state: bool, dim=0):
+    async def set_state(self, address: int, state: bool, dim=0, colortemp=None):
         if state:
             if dim is None:
                 payload = binascii.a2b_hex(f"{address:02x}0110009701")
@@ -171,8 +171,13 @@ class PlejdMesh:
                 payload = binascii.a2b_hex(f"{address:02x}0110009801{dim:04x}")
         else:
             payload = binascii.a2b_hex(f"{address:02x}0110009700")
+        await self._write(payload)
 
-        return await self._write(payload)
+        if colortemp is not None:
+            payload = binascii.a2b_hex(f"{address:02x}01100420030111{colortemp:04x}")
+            await self._write(payload)
+
+        return
 
     async def activate_scene(self, index: int):
         payload = binascii.a2b_hex(f"0201100021{index:02x}")
@@ -278,12 +283,13 @@ class PlejdMesh:
                 dim = int.from_bytes(data[6:8], "little")
                 extra_data = data[8:]
                 _LOGGER.debug(
-                    "Address: %s, state: %s, dim: %s, data: %s (%s)",
+                    "Address: %s, state: %s, dim: %s, data: %s (%s / %s)",
                     address,
                     state,
                     dim,
                     extra_data,
                     int.from_bytes(extra_data, "little"),
+                    int.from_bytes(extra_data, "big"),
                 )
                 _LOGGER.debug("DIM Message: %s", data)
                 self._publish(
@@ -322,6 +328,16 @@ class PlejdMesh:
                     self._scene_listeners,
                     {
                         "scene": scene,
+                    },
+                )
+            case b"\x04\x20":
+                colortemp = int.from_bytes(data[8:10], "big")
+                _LOGGER.debug("Address: %s Colortemp: %s", address, colortemp)
+                self._publish(
+                self._state_listeners,
+                    {
+                        "address": address,
+                        "colortemp": colortemp,
                     },
                 )
             case _:
