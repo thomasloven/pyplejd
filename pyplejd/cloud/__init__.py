@@ -25,18 +25,21 @@ headers = {
 
 
 async def _set_session_token(session: ClientSession, username: str, password: str):
-    try:
-        resp = await session.post(
-            API_LOGIN_URL,
-            json={"username": username, "password": password},
-            raise_for_status=True,
-        )
+    resp = await session.post(
+        API_LOGIN_URL,
+        json={"username": username, "password": password},
+    )
+    if resp.status != 200:
         data = await resp.json()
-        user = User(**data)
-        session.headers["X-Parse-Session-Token"] = user.sessionToken
-        return True
-    except aiohttp.ClientError as err:
-        raise AuthenticationError from err
+        if data.get("code", 0) == 101:
+            raise AuthenticationError("Invalid username/password")
+        else:
+            _LOGGER.debug("Authentication failed for unknown reason. No internet?")
+            raise ConnectionError
+    data = await resp.json()
+    user = User(**data)
+    session.headers["X-Parse-Session-Token"] = user.sessionToken
+    return True
 
 
 class PlejdCloudSite:
@@ -86,6 +89,7 @@ class PlejdCloudSite:
             await self.get_details()
         except (AuthenticationError, ConnectionError) as err:
             if backup:
+                _LOGGER.debug("Loading site data failed. Reverting to back-up.")
                 self._details_raw = backup
                 self.details = SiteDetails(**backup)
             else:
