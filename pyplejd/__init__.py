@@ -9,6 +9,7 @@ from .ble import PlejdMesh
 from .cloud import PlejdCloudSite
 
 from .const import PLEJD_SERVICE, LIGHT, SENSOR, SWITCH, UNKNOWN
+from .errors import AuthenticationError, ConnectionError
 
 if TYPE_CHECKING:
     from .interface import PlejdDevice, PlejdScene
@@ -36,8 +37,8 @@ class PlejdManager:
         self.scenes: list[PlejdScene] = []
         self.cloud = PlejdCloudSite(**credentials)
 
-    async def init(self):
-        await self.cloud.load_site_details()
+    async def init(self, sitedata=None):
+        await self.cloud.load_site_details(sitedata)
 
         self.mesh.set_key(self.cloud.cryptokey)
         self.mesh.subscribe_connect(self._update_connected)

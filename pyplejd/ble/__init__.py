@@ -184,10 +184,13 @@ class PlejdMesh:
         return await self._write(payload)
 
     async def poll_time(self, address: int):
+        client = self._client
+        if client is None:
+            return False
         payload = binascii.a2b_hex(f"{address:02x}0102001b")
         await self._write(payload)
 
-        retval = await self._client.read_gatt_char(PLEJD_LASTDATA)
+        retval = await client.read_gatt_char(PLEJD_LASTDATA)
         data = encrypt_decrypt(self._crypto_key, self._gateway_node, retval)
         ts = int.from_bytes(data[5:9], "little")
         dt = datetime.fromtimestamp(ts)

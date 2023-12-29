@@ -1,4 +1,5 @@
 from aiohttp import ClientSession
+import aiohttp
 import logging
 
 from .site_details import User, SiteDetails
@@ -6,6 +7,7 @@ from .site_list import SiteListItem
 
 from ..interface import PlejdDevice, PlejdScene, PlejdSiteSummary
 from .. import const
+from ..errors import AuthenticationError, ConnectionError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,15 +25,18 @@ headers = {
 
 
 async def _set_session_token(session: ClientSession, username: str, password: str):
-    resp = await session.post(
-        API_LOGIN_URL,
-        json={"username": username, "password": password},
-        raise_for_status=True,
-    )
-    data = await resp.json()
-    user = User(**data)
-    session.headers["X-Parse-Session-Token"] = user.sessionToken
-    return True
+    try:
+        resp = await session.post(
+            API_LOGIN_URL,
+            json={"username": username, "password": password},
+            raise_for_status=True,
+        )
+        data = await resp.json()
+        user = User(**data)
+        session.headers["X-Parse-Session-Token"] = user.sessionToken
+        return True
+    except aiohttp.ClientError as err:
+        raise AuthenticationError from err
 
 
 class PlejdCloudSite:
@@ -44,39 +49,56 @@ class PlejdCloudSite:
 
     @staticmethod
     async def get_sites(username, password) -> list[PlejdSiteSummary]:
-        async with ClientSession(base_url=API_BASE_URL, headers=headers) as session:
-            await _set_session_token(session, username, password)
-            resp = await session.post(API_SITE_LIST_URL, raise_for_status=True)
-            data = await resp.json()
-            sites = [SiteListItem(**s) for s in data["result"]]
-            return [
-                PlejdSiteSummary(
-                    siteId=site.site.siteId,
-                    title=site.site.title,
-                    deviceCount=len(site.plejdDevice),
-                )
-                for site in sites
-            ]
+        try:
+            async with ClientSession(base_url=API_BASE_URL, headers=headers) as session:
+                await _set_session_token(session, username, password)
+                resp = await session.post(API_SITE_LIST_URL, raise_for_status=True)
+                data = await resp.json()
+                sites = [SiteListItem(**s) for s in data["result"]]
+                return [
+                    PlejdSiteSummary(
+                        siteId=site.site.siteId,
+                        title=site.site.title,
+                        deviceCount=len(site.plejdDevice),
+                    )
+                    for site in sites
+                ]
+        except aiohttp.ClientError as err:
+            raise ConnectionError from err
 
     async def get_details(self):
-        async with ClientSession(base_url=API_BASE_URL, headers=headers) as session:
-            await _set_session_token(session, self.username, self.password)
-            resp = await session.post(
-                API_SITE_DETAILS_URL,
-                params={"siteId": self.siteId},
-                raise_for_status=True,
-            )
-            data = await resp.json()
-            self._details_raw = data["result"][0]
-            self.details = SiteDetails(**data["result"][0])
+        try:
+            async with ClientSession(base_url=API_BASE_URL, headers=headers) as session:
+                await _set_session_token(session, self.username, self.password)
+                resp = await session.post(
+                    API_SITE_DETAILS_URL,
+                    params={"siteId": self.siteId},
+                    raise_for_status=True,
+                )
+                data = await resp.json()
+                self._details_raw = data["result"][0]
+                self.details = SiteDetails(**data["result"][0])
+        except aiohttp.ClientError as err:
+            raise ConnectionError from err
 
-    async def load_site_details(self):
-        await self.get_details()
+    async def load_site_details(self, backup=None):
+        try:
+            await self.get_details()
+        except (AuthenticationError, ConnectionError) as err:
+            if backup:
+                self._details_raw = backup
+                self.details = SiteDetails(**backup)
+            else:
+                raise err
+
         _LOGGER.debug("Site data loaded")
         _LOGGER.debug(("Mesh Devices:", self.mesh_devices))
 
     async def get_raw_details(self):
-        await self.get_details()
+        try:
+            await self.get_details()
+        except (AuthenticationError, ConnectionError):
+            pass
         return self._details_raw
 
     @classmethod
