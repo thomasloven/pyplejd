@@ -51,6 +51,12 @@ class PlejdCloudSite:
         self._details_raw = None
 
     @staticmethod
+    async def verify_credentials(username, password) -> bool:
+        async with ClientSession(base_url=API_BASE_URL, headers=headers) as session:
+            await _set_session_token(session, username, password)
+            return True
+
+    @staticmethod
     async def get_sites(username, password) -> list[PlejdSiteSummary]:
         try:
             async with ClientSession(base_url=API_BASE_URL, headers=headers) as session:

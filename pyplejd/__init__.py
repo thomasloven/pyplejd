@@ -19,6 +19,7 @@ _LOGGER = logging.getLogger(__name__)
 __all__ = [
     "PlejdManager",
     "get_sites",
+    "verify_credentials"
     "PLEJD_SERVICE",
     "LIGHT",
     "SENSOR",
@@ -27,6 +28,7 @@ __all__ = [
 ]
 
 get_sites = PlejdCloudSite.get_sites
+verify_credentials = PlejdCloudSite.verify_credentials
 
 
 class PlejdManager:
