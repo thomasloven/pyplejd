@@ -25,6 +25,8 @@ __all__ = [
     "SENSOR",
     "SWITCH",
     "UNKNOWN",
+    "AuthenticationError",
+    "ConnectionError",
 ]
 
 get_sites = PlejdCloudSite.get_sites

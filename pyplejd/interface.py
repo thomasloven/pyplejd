@@ -5,13 +5,9 @@ try:
 except ImportError:
     from pydantic import BaseModel, PrivateAttr
 from typing import Literal, TYPE_CHECKING, Callable
-import logging
 
 if TYPE_CHECKING:
     from .ble import PlejdMesh
-
-_LOGGER = logging.getLogger(__name__)
-
 
 class PlejdSiteSummary(BaseModel):
     title: str

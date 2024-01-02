@@ -42,7 +42,8 @@ class PlejdMesh:
             self._connectable_nodes.add(BLEaddress.upper())
 
     def see_device(self, node: BLEDevice, rssi: int):
-        self._seen_nodes[node] = rssi
+        _LOGGER.debug(f"Saw device {node} (rssi: {rssi}, prev: {self._seen_nodes.get(node, -1e6)})")
+        self._seen_nodes[node] = max(rssi, self._seen_nodes.get(node, -1e6))
 
     def set_key(self, key: str):
         self._crypto_key = key
