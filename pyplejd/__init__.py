@@ -10,6 +10,7 @@ from .cloud import PlejdCloudSite
 
 from .const import PLEJD_SERVICE, LIGHT, SENSOR, SWITCH, UNKNOWN
 from .errors import AuthenticationError, ConnectionError
+from .interface import PlejdCloudCredentials
 
 if TYPE_CHECKING:
     from .interface import PlejdDevice, PlejdScene
@@ -27,6 +28,7 @@ __all__ = [
     "UNKNOWN",
     "AuthenticationError",
     "ConnectionError",
+    "PlejdCloudCredentials"
 ]
 
 get_sites = PlejdCloudSite.get_sites
@@ -34,8 +36,8 @@ verify_credentials = PlejdCloudSite.verify_credentials
 
 
 class PlejdManager:
-    def __init__(self, credentials):
-        self.credentials = credentials
+    def __init__(self, credentials: PlejdCloudCredentials):
+        self.credentials: PlejdCloudCredentials = credentials
         self.mesh = PlejdMesh()
         self.devices: list[PlejdDevice] = []
         self.scenes: list[PlejdScene] = []

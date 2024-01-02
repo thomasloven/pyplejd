@@ -4,10 +4,15 @@ try:
     from pydantic.v1 import BaseModel, PrivateAttr
 except ImportError:
     from pydantic import BaseModel, PrivateAttr
-from typing import Literal, TYPE_CHECKING, Callable
+from typing import Literal, TYPE_CHECKING, Callable, TypedDict
 
 if TYPE_CHECKING:
     from .ble import PlejdMesh
+
+class PlejdCloudCredentials(TypedDict):
+    username: str
+    password: str
+    siteId: str
 
 class PlejdSiteSummary(BaseModel):
     title: str
