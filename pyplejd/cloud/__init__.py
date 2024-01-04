@@ -219,6 +219,7 @@ class PlejdCloudSite:
                     room=room,
                     dimmable=dimmable,
                     colortemp=colortemp,
+                    hidden=device.hiddenFromRoomList
                 )
             )
         return retval

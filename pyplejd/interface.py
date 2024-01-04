@@ -34,6 +34,7 @@ class PlejdDevice(BaseModel):
     room: str
     firmware: str
     inputAddress: list[int]
+    hidden: bool
 
     _state: bool = PrivateAttr()
     _dim: int = PrivateAttr()
