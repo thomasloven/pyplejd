@@ -32,6 +32,7 @@ HARDWARE = {
     "8": Device("SPR-01", SWITCH),
     "10": Device("WRT-01", SENSOR),
     "11": Device("DIM-01-2P", LIGHT, dimmable=True),
+    "12": Device("DAL-01", UNKNOWN),
     "13": Device("Generic", LIGHT),
     "14": Device("DIM-01-LC", LIGHT, dimmable=True),
     "15": Device("DIM-02-LC", LIGHT, dimmable=True),
