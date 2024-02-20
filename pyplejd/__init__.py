@@ -8,7 +8,7 @@ from bleak_retry_connector import close_stale_connections
 from .ble import PlejdMesh
 from .cloud import PlejdCloudSite
 
-from .const import PLEJD_SERVICE, LIGHT, SENSOR, SWITCH, UNKNOWN
+from .const import PLEJD_SERVICE, LIGHT, SENSOR, MOTION, SWITCH, UNKNOWN
 from .errors import AuthenticationError, ConnectionError
 from .interface import PlejdCloudCredentials
 
@@ -24,6 +24,7 @@ __all__ = [
     "PLEJD_SERVICE",
     "LIGHT",
     "SENSOR",
+    "MOTION",
     "SWITCH",
     "UNKNOWN",
     "AuthenticationError",

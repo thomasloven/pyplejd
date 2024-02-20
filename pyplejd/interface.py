@@ -30,7 +30,7 @@ class PlejdDevice(BaseModel):
     hardware: str
     dimmable: bool | None
     colortemp: list | bool
-    outputType: Literal["LIGHT", "SENSOR", "RELAY", "UNKNOWN"] | None
+    outputType: Literal["LIGHT", "SENSOR", "RELAY", "MOTION", "UNKNOWN"] | None
     room: str
     firmware: str
     inputAddress: list[int]

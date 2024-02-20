@@ -115,6 +115,7 @@ class PlejdDeviceInputSetting(PlejdObject):
     deviceId: str
     siteId: str
     input: int
+    motionSensorData: dict | None
     # buttonType: str = ""
     # dimSpeed: int = 0
     # doubleSidedDirectionButton: bool = False

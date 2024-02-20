@@ -14,6 +14,7 @@ from .crypto import auth_response, encrypt_decrypt
 from ..const import PLEJD_AUTH, PLEJD_LASTDATA, PLEJD_LIGHTLEVEL, PLEJD_PING, PLEJD_DATA
 
 _LOGGER = logging.getLogger(__name__)
+_DEVLOGGER = logging.getLogger("pyplejd.dev")
 
 
 class PlejdMesh:
@@ -335,17 +336,52 @@ class PlejdMesh:
                     },
                 )
             case b"\x04\x20":
-                colortemp = int.from_bytes(data[8:10], "big")
-                _LOGGER.debug("Address: %s Colortemp: %s", address, colortemp)
-                self._publish(
-                self._state_listeners,
-                    {
-                        "address": address,
-                        "colortemp": colortemp,
-                    },
-                )
+                if len(data) < 6:
+                    return
+                if data[6] == 1:
+                    colortemp = int.from_bytes(data[8:10], "big")
+                    _LOGGER.debug("Address: %s Colortemp: %s", address, colortemp)
+
+                    self._publish(
+                        self._state_listeners,
+                        {
+                            "address": address,
+                            "colortemp": colortemp,
+                        },
+                    )
+                elif data[6] == 3:
+                    luminosity = int.from_bytes(data[-2:], "big")
+                    _LOGGER.debug("Address: %s luminosity: %s", address, luminosity)
+                    self._publish(
+                        self._button_listeners,
+                        {
+                            "address": address,
+                            "button": 0,
+                        },
+                    )
+                else:
+                    if len(data) > 10:
+                        _DEVLOGGER.debug(
+                            "Unknown new-style LASTDATA command - address: %s - %s %s %s %s %s",
+                            address,
+                            data.hex()[0:2],
+                            data.hex()[2:6],
+                            data.hex()[6:10],
+                            data.hex()[10:16],
+                            data.hex()[16:]
+                        )
+                    else:
+                        _DEVLOGGER.debug(
+                            "Unknown new-style LASTDATA command - address: %s - %s %s %s %s",
+                            address,
+                            data.hex()[0:2],
+                            data.hex()[2:6],
+                            data.hex()[6:10],
+                            data.hex()[10:]
+                        )
             case _:
                 _LOGGER.debug("Unknown cmd (%s) to %s: %s", cmd, address, data[5:])
+                _DEVLOGGER.debug("Unknown LASTDATA cmd (%s) to %s: %s", cmd, address, data[5:])
 
     def _parse_lightlevel(self, lightlevel: bytearray):
         _LOGGER.debug("Parsing LIGHTLEVEL: %s", lightlevel.hex())

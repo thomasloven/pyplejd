@@ -200,6 +200,8 @@ class PlejdCloudSite:
                     inputs = details.inputAddress.get(deviceId)
                     if inputs:
                         inputAddress.append(inputs[str(inpt.input)])
+                if inpt.motionSensorData is not None:
+                    outputType = const.MOTION
 
             room = next((r for r in details.rooms if r.roomId == device.roomId), None)
             if room is not None:
