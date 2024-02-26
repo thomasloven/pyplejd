@@ -99,13 +99,8 @@ class PlejdMesh:
 
         # Try to connect to nodes in order of decreasing RSSI
         sorted_nodes = dict(
-            sorted(self._seen_nodes.items(), key=lambda n: n[1], reverse=True)
+            sorted(self._seen_nodes.items(), key=lambda n: (n[0] in self._connectable_nodes, n[1]), reverse=True)
         )
-        sorted_nodes = {
-            node: rssi
-            for node, rssi in sorted_nodes.items()
-            if node.address.replace(":", "").upper() in self._connectable_nodes
-        }
 
         if not sorted_nodes:
             _LOGGER.debug(
