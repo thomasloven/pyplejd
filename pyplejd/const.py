@@ -43,6 +43,7 @@ HARDWARE = {
     "20": Device("SPR-01", SWITCH),
     "36": Device("LED-75", LIGHT, dimmable=True),
     "70": Device("WMS-01", MOTION),
+    "103": Device("OUT-01", LIGHT, dimmable=True, colortemp=True),
     "167": Device("DWN-01", LIGHT, dimmable=True, colortemp=True),
     "199": Device("DWN-02", LIGHT, dimmable=True, colortemp=True),
 }
