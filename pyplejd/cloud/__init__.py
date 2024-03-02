@@ -159,8 +159,10 @@ class PlejdCloudSite:
             if hardware is const.HARDWARE_UNKNOWN:
                 hardware_name += f" ({plejdDevice.hardwareId})"
 
-            dimmable = hardware.dimmable
-            colortemp = hardware.colortemp
+            # dimmable = hardware.dimmable
+            # colortemp = hardware.colortemp
+            dimmable = bool(device.traits & 0x2)
+            colortemp = bool(device.traits & 0x4)
 
             if outputType is None:
                 outputType = hardware.type
@@ -181,13 +183,14 @@ class PlejdCloudSite:
                         address = outputs[str(outputSettings.output)]
                     if rxaddr := details.rxAddress.get(deviceId):
                         rxaddress = rxaddr[str(outputSettings.output)]
-                if outputSettings.dimCurve is not None:
-                    if outputSettings.dimCurve not in ["NonDimmable", "RelayNormal"]:
-                        dimmable = True
-                    elif outputSettings.predefinedLoad is not None and outputSettings.predefinedLoad.loadType == "DWN":
-                        dimmable = True
-                    else:
-                        dimmable = False
+                # if outputSettings.dimCurve is not None:
+                #     if outputSettings.dimCurve not in ["NonDimmable", "RelayNormal"]:
+                #         dimmable = True
+                #     # elif outputSettings.predefinedLoad is not None and outputSettings.predefinedLoad.defaultDimCurve
+                #     elif (outputSettings.predefinedLoad is not None and outputSettings.predefinedLoad.loadType in ["DWN", "DALI"]):
+                #         dimmable = True
+                #     else:
+                #         dimmable = False
                 colortemp = False
                 if (ct := outputSettings.colorTemperature) is not None:
                     if ct.behavior == "adjustable":
