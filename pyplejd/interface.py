@@ -104,6 +104,7 @@ class PlejdDevice(BaseModel):
 
     async def turn_on(self, dim=0, colortemp=None):
         if dim is not None:
+            dim = int(dim)
             dim = dim << 8 | dim
         if colortemp is not None:
             colortemp = int(1e6/colortemp)
