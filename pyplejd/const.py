@@ -12,6 +12,8 @@ MOTION = "MOTION"
 SWITCH = "RELAY"
 UNKNOWN = "UNKNOWN"
 
+OUTPUT_TYPES = [LIGHT, SENSOR, MOTION, SWITCH]
+
 
 class Device:
     def __init__(self, name, type, dimmable=False, colortemp=False):
