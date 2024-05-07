@@ -210,6 +210,9 @@ class PlejdCloudSite:
             if room is not None:
                 room = room.title
 
+            if outputType is not None and outputType not in const.OUTPUT_TYPES:
+                outputType = const.UNKNOWN
+
             retval.append(
                 PlejdDevice(
                     objectId=objectId,
