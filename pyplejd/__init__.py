@@ -20,7 +20,7 @@ _LOGGER = logging.getLogger(__name__)
 __all__ = [
     "PlejdManager",
     "get_sites",
-    "verify_credentials"
+    "verify_credentials",
     "PLEJD_SERVICE",
     "LIGHT",
     "SENSOR",
@@ -73,7 +73,8 @@ class PlejdManager:
     def add_mesh_device(self, device, rssi):
         return self.mesh.see_device(device, rssi)
 
-    async def close_stale(self, device):
+    @staticmethod
+    async def close_stale(device):
         await close_stale_connections(device)
 
     @property

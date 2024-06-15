@@ -23,8 +23,8 @@ class PlejdMesh:
         self._expected_nodes = set()
         self._connectable_nodes = set()
         self._gateway_node = None
-        self._crypto_key: bytearray = None
-        self._client: BleakClient = None
+        self._crypto_key: str | None = None
+        self._client: BleakClient | None = None
 
         self._connect_listeners = set()
         self._state_listeners = set()
@@ -37,10 +37,10 @@ class PlejdMesh:
     def connected(self):
         return self._client is not None
 
-    def expect_device(self, BLEaddress: str, connectable=True):
-        self._expected_nodes.add(BLEaddress.upper())
+    def expect_device(self, ble_address: str, connectable=True):
+        self._expected_nodes.add(ble_address.upper())
         if connectable:
-            self._connectable_nodes.add(BLEaddress.upper())
+            self._connectable_nodes.add(ble_address.upper())
 
     def see_device(self, node: BLEDevice, rssi: int):
         _LOGGER.debug(f"Saw device {node} (rssi: {rssi}, prev: {self._seen_nodes.get(node, -1e6)})")
@@ -49,7 +49,8 @@ class PlejdMesh:
     def set_key(self, key: str):
         self._crypto_key = key
 
-    def _subscribe(self, set_: set, listener: Callable):
+    @staticmethod
+    def _subscribe(set_: set, listener: Callable):
         set_.add(listener)
 
         def remover():
@@ -58,7 +59,8 @@ class PlejdMesh:
 
         return remover
 
-    def _publish(self, set_: set, *args, **kwargs):
+    @staticmethod
+    def _publish(set_: set, *args, **kwargs):
         for listener in set_:
             listener(*args, **kwargs)
 
@@ -218,7 +220,8 @@ class PlejdMesh:
             return False
         return True
 
-    async def _ping(self, client):
+    @staticmethod
+    async def _ping(client):
         if client is None:
             return False
         try:
@@ -381,7 +384,7 @@ class PlejdMesh:
     def _parse_lightlevel(self, lightlevel: bytearray):
         _LOGGER.debug("Parsing LIGHTLEVEL: %s", lightlevel.hex())
         for i in range(0, len(lightlevel), 10):
-            ll = lightlevel[i : i + 10]
+            ll = lightlevel[i: i + 10]
             address = int(ll[0])
             state = bool(ll[1])
             dim = int.from_bytes(ll[5:7], "little")

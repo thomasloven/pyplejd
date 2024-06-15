@@ -47,7 +47,7 @@ class PlejdCloudSite:
         self.username = username
         self.password = password
         self.siteId = siteId
-        self.details: SiteDetails = None
+        self.details: SiteDetails | None = None
         self._details_raw = None
 
     @staticmethod
