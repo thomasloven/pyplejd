@@ -9,10 +9,12 @@ from typing import Literal, TYPE_CHECKING, Callable, TypedDict
 if TYPE_CHECKING:
     from .ble import PlejdMesh
 
+
 class PlejdCloudCredentials(TypedDict):
     username: str
     password: str
     siteId: str
+
 
 class PlejdSiteSummary(BaseModel):
     title: str
@@ -36,13 +38,13 @@ class PlejdDevice(BaseModel):
     inputAddress: list[int]
     hidden: bool
 
-    _state: bool = PrivateAttr()
-    _dim: int = PrivateAttr()
-    _colortemp: int = PrivateAttr()
-    _available: bool = PrivateAttr()
+    _state: bool | None = PrivateAttr()
+    _dim: int | None = PrivateAttr()
+    _colortemp: int | None = PrivateAttr()
+    _available: bool | None = PrivateAttr()
     _state_listeners: set = PrivateAttr()
     _event_listeners: set = PrivateAttr()
-    _mesh: "PlejdMesh" = PrivateAttr()
+    _mesh: PlejdMesh | None = PrivateAttr()
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -57,7 +59,8 @@ class PlejdDevice(BaseModel):
     def connect_mesh(self, mesh: PlejdMesh):
         self._mesh = mesh
 
-    def _subscribe(self, set_: set, listener: Callable):
+    @staticmethod
+    def _subscribe(set_: set, listener: Callable):
         set_.add(listener)
 
         def remover():
@@ -120,7 +123,7 @@ class PlejdScene(BaseModel):
     title: str
     hidden: bool
 
-    _mesh: "PlejdMesh" = PrivateAttr()
+    _mesh: PlejdMesh | None = PrivateAttr()
     _listeners: set = PrivateAttr()
 
     def __init__(self, **data):
