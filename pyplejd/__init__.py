@@ -70,7 +70,7 @@ class PlejdManager:
             for s in self.scenes:
                 _LOGGER.debug(s)
 
-    def add_mesh_device(self, device, rssi):
+    def add_mesh_device(self, device, rssi) -> bool:
         return self.mesh.see_device(device, rssi)
 
     async def close_stale(self, device):
