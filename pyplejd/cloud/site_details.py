@@ -109,6 +109,7 @@ class PlejdDevice(PlejdObject):
     # coordinates: dict = None
     # predefinedLoad: dict = None
     # diagnostics: str
+    isFellowshipFollower: bool = False
 
 
 class PlejdDeviceInputSetting(PlejdObject):
@@ -116,7 +117,7 @@ class PlejdDeviceInputSetting(PlejdObject):
     siteId: str
     input: int
     motionSensorData: dict | None
-    # buttonType: str = ""
+    buttonType: str = ""
     # dimSpeed: int = 0
     # doubleSidedDirectionButton: bool = False
     # singleClick: str | None = None
@@ -144,6 +145,14 @@ class ColorTemperature(BaseModel):
     behavior: str
     # startTemperature: int
 
+class CoverableSettings(BaseModel):
+    # coverableMovementDirection: str
+    # coverableTiltTime: int
+    coverableTiltStart: int|None = None
+    coverableTiltEnd: int|None = None
+    # coverablePostRunTime: int
+    # coverableCalibration: dict
+
 class PlejdDeviceOutputSetting(PlejdObject):
     deviceId: str
     siteId: str
@@ -161,8 +170,17 @@ class PlejdDeviceOutputSetting(PlejdObject):
     # bootState: str
     predefinedLoad: PredefinedLoad | None = None
     colorTemperature: ColorTemperature | None = None
+    coverableSettings: CoverableSettings | None = None
     # minimumRelayOffTime: int = None
 
+class MotionSensor(PlejdObject):
+    deviceId: str
+    siteId: str
+    input: int | None = None
+    deviceParseId: str
+    # dirty: bool
+    # dirtyRemove: bool
+    # active: bool
 
 class SceneStep(PlejdObject):
     sceneId: str
@@ -200,7 +218,7 @@ class SiteDetails(BaseModel):
     # astroEvents: list
     inputSettings: list[PlejdDeviceInputSetting]
     outputSettings: list[PlejdDeviceOutputSetting]
-    motionSensors: list
+    motionSensors: list[MotionSensor]
     rxAddress: dict[str, dict[str, int]]|None
     # stateTimers: dict
     # sitePermission: SitePermission
@@ -211,3 +229,36 @@ class SiteDetails(BaseModel):
     roomAddress: dict[str, int]
     sceneIndex: dict[str, int]
     deviceLimit: int
+
+
+    def find_plejdDevice(self, deviceId: str) -> PlejdDevice:
+        for d in self.plejdDevices:
+            if d.deviceId == deviceId:
+                return d
+
+    def find_outputSettings(self, deviceId: str, output: int) -> PlejdDeviceOutputSetting:
+        for d in self.outputSettings:
+            if d.deviceId == deviceId and d.output == output:
+                return d
+
+    def find_inputSettings(self, deviceId, input: int) -> PlejdDeviceInputSetting:
+        for d in self.inputSettings:
+            if d.deviceId == deviceId and d.input == input:
+                return d
+
+    def find_motionSensorData(self, deviceId: str|None, input: int) -> MotionSensor:
+        for d in self.motionSensors:
+            if d.deviceId == deviceId and d.input == input:
+                return d
+
+    def find_device(self, deviceId: str|None = None, objectId: str|None = None) -> Device:
+        for d in self.devices:
+            if objectId is not None and d.objectId == objectId:
+                return d
+            if deviceId is not None and d.deviceId == deviceId:
+                return d
+
+    def find_room(self, roomId: str) -> Room:
+        for r in self.rooms:
+            if r.roomId == roomId:
+                return r

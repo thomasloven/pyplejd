@@ -1,11 +1,13 @@
 from aiohttp import ClientSession
 import aiohttp
 import logging
+from typing import Generator, TypedDict
 
 from .site_details import User, SiteDetails
 from .site_list import SiteListItem
+from .types import PlejdSiteSummary, PlejdEntityData, PlejdSceneData
 
-from ..interface import PlejdDevice, PlejdScene, PlejdSiteSummary
+from ..interface import PlejdScene
 from .. import const
 from ..errors import AuthenticationError, ConnectionError
 
@@ -22,7 +24,6 @@ headers = {
     "X-Parse-Application-Id": API_APP_ID,
     "Content-Type": "application/json",
 }
-
 
 async def _set_session_token(session: ClientSession, username: str, password: str):
     resp = await session.post(
@@ -133,104 +134,72 @@ class PlejdCloudSite:
         return retval
 
     @property
-    def devices(self) -> list[PlejdDevice]:
-        if not self.details:
-            raise RuntimeError("No site details have been fetched")
-        retval = []
+    def outputs(self) -> Generator[PlejdEntityData, None, None]:
         details = self.details
-        for device in details.devices:
-            objectId = device.objectId
-            deviceId = device.deviceId
-            address = details.deviceAddress[deviceId]
-            rxaddress = None
-            outputType = device.outputType
-            inputAddress = []
+        if not details:
+            raise RuntimeError("No site details have been fetched")
 
-            plejdDevice = next(
-                (d for d in details.plejdDevices if d.deviceId == deviceId), None
-            )
-            if plejdDevice is None:
+        for deviceId, outputs in details.outputAddress.items():
+            plejdDevice = details.find_plejdDevice(deviceId)
+            deviceAddress = details.deviceAddress.get(deviceId)
+
+            # Ignore grouped devices
+            if plejdDevice.isFellowshipFollower:
                 continue
-            hardware = const.HARDWARE.get(
-                plejdDevice.hardwareId, const.HARDWARE_UNKNOWN
-            )
 
-            hardware_name = hardware.name
-            if hardware is const.HARDWARE_UNKNOWN:
-                hardware_name += f" ({plejdDevice.hardwareId})"
+            for output, address in outputs.items():
+                output = int(output)
 
-            # dimmable = hardware.dimmable
-            # colortemp = hardware.colortemp
-            dimmable = bool(device.traits & 0x2)
-            colortemp = bool(device.traits & 0x4)
+                settings = details.find_outputSettings(deviceId, output)
+                if not settings:
+                    continue
 
-            if outputType is None:
-                outputType = hardware.type
+                device = details.find_device(objectId=settings.deviceParseId)
 
-            firmware = plejdDevice.firmware.version
+                room = details.find_room(device.roomId)
 
-            outputSettings = next(
-                (s for s in details.outputSettings if s.deviceParseId == objectId),
-                None,
-            )
-            if outputSettings is not None:
-                if outputSettings.predefinedLoad is not None:
-                    if outputSettings.predefinedLoad.loadType == "No load":
-                        continue
-                if outputSettings.output is not None:
-                    outputs = details.outputAddress.get(deviceId)
-                    if outputs:
-                        address = outputs[str(outputSettings.output)]
-                    if rxaddr := details.rxAddress.get(deviceId):
-                        rxaddress = rxaddr[str(outputSettings.output)]
-                # if outputSettings.dimCurve is not None:
-                #     if outputSettings.dimCurve not in ["NonDimmable", "RelayNormal"]:
-                #         dimmable = True
-                #     # elif outputSettings.predefinedLoad is not None and outputSettings.predefinedLoad.defaultDimCurve
-                #     elif (outputSettings.predefinedLoad is not None and outputSettings.predefinedLoad.loadType in ["DWN", "DALI"]):
-                #         dimmable = True
-                #     else:
-                #         dimmable = False
-                colortemp = False
-                if (ct := outputSettings.colorTemperature) is not None:
-                    if ct.behavior == "adjustable":
-                        colortemp = [ct.minTemperature, ct.maxTemperature]
+                yield {
+                    "address": address,
+                    "deviceAddress": deviceAddress,
+                    "device": device,
+                    "plejdDevice": plejdDevice,
+                    "settings": settings,
+                    "room": room,
+                }
 
+    @property
+    def inputs(self) -> Generator[tuple, None, None]:
+        details = self.details
+        if not details:
+            raise RuntimeError("No site details have been fetched")
 
-            inputSettings = (s for s in details.inputSettings if s.deviceId == deviceId)
-            for inpt in inputSettings:
-                if inpt.input is not None:
-                    inputs = details.inputAddress.get(deviceId)
-                    if inputs:
-                        inputAddress.append(inputs[str(inpt.input)])
-                if inpt.motionSensorData is not None:
-                    outputType = const.MOTION
+        for deviceId, inputs in details.inputAddress.items():
+            plejdDevice = details.find_plejdDevice(deviceId)
+            deviceAddress = details.deviceAddress.get(deviceId)
 
-            room = next((r for r in details.rooms if r.roomId == device.roomId), None)
-            if room is not None:
-                room = room.title
+            for input, address in inputs.items():
+                input = int(input)
 
-            if outputType is not None and outputType not in const.OUTPUT_TYPES:
-                outputType = const.UNKNOWN
+                settings = details.find_inputSettings(deviceId, input)
+                if not settings:
+                    continue
 
-            retval.append(
-                PlejdDevice(
-                    objectId=objectId,
-                    BLEaddress=deviceId,
-                    address=address,
-                    rxaddress=rxaddress,
-                    inputAddress=inputAddress,
-                    name=device.title,
-                    hardware=hardware_name,
-                    firmware=firmware,
-                    outputType=outputType,
-                    room=room,
-                    dimmable=dimmable,
-                    colortemp=colortemp,
-                    hidden=device.hiddenFromRoomList
-                )
-            )
-        return retval
+                if (motionSensor := details.find_motionSensorData(deviceId, input)):
+                    device = details.find_device(objectId=motionSensor.deviceParseId)
+                else:
+                    device = details.find_device(deviceId=settings.deviceId)
+
+                room = details.find_room(device.roomId)
+
+                yield {
+                    "address": address,
+                    "deviceAddress": deviceAddress,
+                    "device": device,
+                    "plejdDevice": plejdDevice,
+                    "settings": settings,
+                    "room": room,
+                    "motion": bool(motionSensor),
+                }
 
     @property
     def scenes(self) -> list[PlejdScene]:
@@ -246,5 +215,9 @@ class PlejdCloudSite:
             retval.append(
                 PlejdScene(sceneId=sceneId, title=title, index=index, hidden=hidden)
             )
+            # yield {
+            #     "scene": scene,
+            #     index: details.sceneIndex.get(scene.sceneId, -1)
+            # }
 
         return retval

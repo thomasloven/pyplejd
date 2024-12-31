@@ -10,9 +10,10 @@ LIGHT = "LIGHT"
 SENSOR = "SENSOR"
 MOTION = "MOTION"
 SWITCH = "RELAY"
+COVERABLE = "COVERABLE"
 UNKNOWN = "UNKNOWN"
 
-OUTPUT_TYPES = [LIGHT, SENSOR, MOTION, SWITCH, UNKNOWN]
+OUTPUT_TYPES = [LIGHT, SENSOR, MOTION, SWITCH, COVERABLE, UNKNOWN]
 
 
 class Device:
@@ -39,6 +40,7 @@ HARDWARE = {
     "13": Device("Generic", LIGHT),
     "14": Device("DIM-01-LC", LIGHT, dimmable=True),
     "15": Device("DIM-02-LC", LIGHT, dimmable=True),
+    "16": Device("JAL-01", LIGHT, dimmable=True),
     "17": Device("REL-01-2P", SWITCH),
     "18": Device("REL-02", SWITCH),
     "19": Device("EXT-01", UNKNOWN),
