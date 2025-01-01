@@ -2,12 +2,14 @@ import logging
 
 LOGGER = logging.getLogger(__name__)
 
-def log_command(message, addr = None):
+
+def log_command(message, addr=None):
     logger = LOGGER.debug
     if addr:
         logger(f"({addr:>3}) - " + message)
     else:
         logger(f"      - " + message)
+
 
 def parse_data(data: bytearray):
     data_bytes = [data[i] for i in range(0, len(data))]
@@ -16,7 +18,6 @@ def parse_data(data: bytearray):
         case [0x01, 0x01, 0x10, *extra]:
             # Time data
             log_command(f"TIME DATA {extra}", "TME")
-
 
         case [0x02, 0x01, 0x10, *extra]:
             # Scene update
@@ -29,7 +30,6 @@ def parse_data(data: bytearray):
                 "scene": scene,
                 "triggered": True,
             }
-
 
         case [0x00, 0x01, 0x10, 0x00, 0x15, *extra]:
             # Identify buttons command
@@ -44,13 +44,25 @@ def parse_data(data: bytearray):
                 "action": "release" if len(extra) and not extra[0] else "press",
             }
 
-        case [addr, 0x01, 0x10, 0x00, 0xC8, state, dim1, dim2, *extra] | [addr, 0x01, 0x10, 0x00, 0x98, state, dim1, dim2, *extra]:
+        case [addr, 0x01, 0x10, 0x00, 0xC8, state, dim1, dim2, *extra] | [
+            addr,
+            0x01,
+            0x10,
+            0x00,
+            0x98,
+            state,
+            dim1,
+            dim2,
+            *extra,
+        ]:
             # State dim command
             extra_hex = "".join(f"{e:02x}" for e in extra)
             log_command(f"DIM {state=} {dim1=} {dim2=} {extra=} {extra_hex}", addr)
 
             dim = dim2
-            cover_position = int.from_bytes([dim1, dim2], byteorder="little", signed=True)
+            cover_position = int.from_bytes(
+                [dim1, dim2], byteorder="little", signed=True
+            )
             cover_angle = None
             if extra:
                 # The cover angle is given as a six bit signed number?
@@ -78,7 +90,6 @@ def parse_data(data: bytearray):
                 "state": state,
             }
 
-
         case [addr, 0x01, 0x10, 0x04, 0x20, a, 0x01, 0x11, *color_temp]:
             # Color temperature
             color_temp = int.from_bytes(color_temp, "big")
@@ -87,7 +98,6 @@ def parse_data(data: bytearray):
                 "address": addr,
                 "temperature": color_temp,
             }
-
 
         case [addr, 0x01, 0x10, 0x04, 0x20, a, 0x03, b, *extra, ll1, ll2]:
             # Motion
@@ -99,11 +109,9 @@ def parse_data(data: bytearray):
                 "luminance": lightlevel,
             }
 
-
         case [addr, 0x01, 0x10, 0x04, 0x20, a, 0x05, *extra]:
             # Off by timeout?
             log_command(f"TIMEOUT {a=}-5 {extra=}", addr)
-
 
         case [addr, 0x01, 0x10, 0x04, 0x20, *extra]:
             # Unknown new style command

@@ -1,6 +1,7 @@
 from .plejd_device import PlejdInput
 from .device_type import PlejdDeviceType
 
+
 class PlejdButton(PlejdInput):
 
     def __init__(self, *args, **kwargs):
@@ -13,5 +14,5 @@ class PlejdButton(PlejdInput):
 
     def parse_state(self, update, state):
         state = {**state}
-        self._state["action"] = None # Don't save the action
+        self._state["action"] = None  # Don't save the action
         return state

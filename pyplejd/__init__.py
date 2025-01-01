@@ -10,7 +10,13 @@ from .cloud import PlejdCloudSite
 
 from .const import PLEJD_SERVICE, LIGHT, SENSOR, MOTION, SWITCH, COVERABLE, UNKNOWN
 from .errors import AuthenticationError, ConnectionError
-from .interface import PlejdCloudCredentials, outputDeviceClass, inputDeviceClass, PlejdDevice, PlejdScene
+from .interface import (
+    PlejdCloudCredentials,
+    outputDeviceClass,
+    inputDeviceClass,
+    PlejdDevice,
+    PlejdScene,
+)
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -24,7 +30,7 @@ class PlejdManager:
     def __init__(self, credentials: PlejdCloudCredentials):
         self.credentials: PlejdCloudCredentials = credentials
         self.mesh = PlejdMesh(self)
-        self.devices: list[PlejdDevice|PlejdScene] = []
+        self.devices: list[PlejdDevice | PlejdScene] = []
         self.cloud = PlejdCloudSite(**credentials)
         self.options = {}
 

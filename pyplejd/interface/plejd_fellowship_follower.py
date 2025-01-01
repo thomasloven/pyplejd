@@ -1,5 +1,6 @@
 from .plejd_device import PlejdBaseDevice
 
+
 class PlejdFellowshipFollower(PlejdBaseDevice):
     # Fellowshipfollowers are lights that are part of a group
     # E.g. several DWN-01 can be grouped with one device being the leader and the rest followers

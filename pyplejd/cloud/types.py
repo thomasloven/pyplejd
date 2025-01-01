@@ -5,7 +5,14 @@ except ImportError:
 
 from typing import TypedDict
 
-from .site_details import Device, PlejdDevice, PlejdDeviceOutputSetting, PlejdDeviceInputSetting, Room, Scene
+from .site_details import (
+    Device,
+    PlejdDevice,
+    PlejdDeviceOutputSetting,
+    PlejdDeviceInputSetting,
+    Room,
+    Scene,
+)
 
 
 class PlejdCloudCredentials(TypedDict):
@@ -13,10 +20,12 @@ class PlejdCloudCredentials(TypedDict):
     password: str
     siteId: str
 
+
 class PlejdSiteSummary(BaseModel):
     title: str
     deviceCount: int
     siteId: str
+
 
 class PlejdEntityData(TypedDict):
     address: int
@@ -25,7 +34,8 @@ class PlejdEntityData(TypedDict):
     plejdDevice: PlejdDevice
     settings: PlejdDeviceOutputSetting | PlejdDeviceInputSetting
     room: Room
-    motion: bool|None
+    motion: bool | None
+
 
 class PlejdSceneData(TypedDict):
     scene: Scene

@@ -25,6 +25,7 @@ headers = {
     "Content-Type": "application/json",
 }
 
+
 async def _set_session_token(session: ClientSession, username: str, password: str):
     resp = await session.post(
         API_LOGIN_URL,
@@ -184,7 +185,7 @@ class PlejdCloudSite:
                 if not settings:
                     continue
 
-                if (motionSensor := details.find_motionSensorData(deviceId, input)):
+                if motionSensor := details.find_motionSensorData(deviceId, input):
                     device = details.find_device(objectId=motionSensor.deviceParseId)
                 else:
                     device = details.find_device(deviceId=settings.deviceId)
@@ -208,7 +209,4 @@ class PlejdCloudSite:
 
         details = self.details
         for scene in details.scenes:
-            yield {
-                "scene": scene,
-                "index": details.sceneIndex.get(scene.sceneId, -1)
-            }
+            yield {"scene": scene, "index": details.sceneIndex.get(scene.sceneId, -1)}

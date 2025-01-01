@@ -1,20 +1,24 @@
 from __future__ import annotations
-from  ..cloud import site_details as sd
+from ..cloud import site_details as sd
 from .device_type import PlejdDeviceType
 
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from ..ble import PlejdMesh
 
 import logging
+
 _LOGGER = logging.getLogger(__name__)
 
+
 class PlejdScene:
-    def __init__(self,
-                scene: sd.Scene,
-                index: int,
-                mesh: PlejdMesh,
-                ):
+    def __init__(
+        self,
+        scene: sd.Scene,
+        index: int,
+        mesh: PlejdMesh,
+    ):
         self.scene = scene
         self.index = index
 
@@ -24,11 +28,10 @@ class PlejdScene:
         self._listeners = set()
 
         self.outputType = PlejdDeviceType.SCENE
-        self.identifier = (self.scene.sceneId)
+        self.identifier = self.scene.sceneId
 
     def __repr__(self):
         return f"<{self.__class__.__name__} ({self.index}) {self.name}>"
-
 
     def match_state(self, state):
         if state.get("scene") == self.index:
@@ -41,6 +44,7 @@ class PlejdScene:
         def remover():
             if listener in self._listeners:
                 self._listeners.remove(listener)
+
         return remover
 
     def update_state(self, **state):

@@ -1,9 +1,10 @@
 from __future__ import annotations
 from enum import IntFlag
-from  ..cloud import site_details as sd
+from ..cloud import site_details as sd
 from .device_type import PlejdDeviceType
 
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from ..ble import PlejdMesh
 
@@ -19,16 +20,18 @@ class PlejdTraits(IntFlag):
 
 
 class PlejdBaseDevice:
-    def __init__(self,
-                 address: int,
-                 deviceAddress: int,
-                 device: sd.Device,
-                 plejdDevice: sd.PlejdDevice,
-                 settings: sd.PlejdDeviceOutputSetting|sd.PlejdDeviceInputSetting,
-                 room: sd.Room,
-                 mesh: PlejdMesh,
-                 *_, **__,
-                 ):
+    def __init__(
+        self,
+        address: int,
+        deviceAddress: int,
+        device: sd.Device,
+        plejdDevice: sd.PlejdDevice,
+        settings: sd.PlejdDeviceOutputSetting | sd.PlejdDeviceInputSetting,
+        room: sd.Room,
+        mesh: PlejdMesh,
+        *_,
+        **__,
+    ):
         self.address = address
         self.deviceAddress = deviceAddress
         self.plejdDevice = plejdDevice
@@ -48,7 +51,6 @@ class PlejdBaseDevice:
     def __repr__(self):
         return f"<{self.__class__.__name__} {self.BLEaddress} ({self.address}) {self.name} {self.outputType}-{self.capabilities!r}>"
 
-
     def match_state(self, state):
         if state.get("address") == self.address:
             return True
@@ -60,6 +62,7 @@ class PlejdBaseDevice:
         def remover():
             if listener in self._listeners:
                 self._listeners.remove(listener)
+
         return remover
 
     def parse_state(self, update, state):
@@ -120,9 +123,10 @@ class PlejdInput(PlejdBaseDevice):
 
     def match_state(self, state):
         if "button in state":
-            if state.get("address") == self.deviceAddress and state.get("button") == self.settings.input:
+            if (
+                state.get("address") == self.deviceAddress
+                and state.get("button") == self.settings.input
+            ):
                 return True
             return False
         return super().match_state(state)
-
-

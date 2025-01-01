@@ -1,11 +1,12 @@
 from __future__ import annotations
 from enum import Enum
+
 try:
     from pydantic.v1 import BaseModel, PrivateAttr
 except ImportError:
     from pydantic import BaseModel, PrivateAttr
 from typing import Literal, TYPE_CHECKING, Callable, TypedDict, Type
-from  ..cloud import site_details as sd, PlejdEntityData
+from ..cloud import site_details as sd, PlejdEntityData
 
 from .plejd_device import PlejdBaseDevice as PlejdDevice
 from .plejd_light import PlejdLight
@@ -21,15 +22,18 @@ from .device_type import PlejdDeviceType
 if TYPE_CHECKING:
     from ..ble import PlejdMesh
 
+
 class PlejdCloudCredentials(TypedDict):
     username: str
     password: str
     siteId: str
 
+
 class PlejdSiteSummary(BaseModel):
     title: str
     deviceCount: int
     siteId: str
+
 
 def outputDeviceClass(device: PlejdEntityData) -> Type[PlejdDevice]:
 
@@ -45,6 +49,7 @@ def outputDeviceClass(device: PlejdEntityData) -> Type[PlejdDevice]:
         return PlejdCover
 
     return PlejdDevice
+
 
 def inputDeviceClass(device: PlejdEntityData) -> Type[PlejdDevice]:
     if device["motion"]:

@@ -136,6 +136,7 @@ class PredefinedLoad(PlejdObject):
     # defaultDimCurve: dict
     # allowedDimCurves: dict
 
+
 class ColorTemperature(BaseModel):
     minTemperature: int
     maxTemperature: int
@@ -145,13 +146,15 @@ class ColorTemperature(BaseModel):
     behavior: str
     # startTemperature: int
 
+
 class CoverableSettings(BaseModel):
     # coverableMovementDirection: str
     # coverableTiltTime: int
-    coverableTiltStart: int|None = None
-    coverableTiltEnd: int|None = None
+    coverableTiltStart: int | None = None
+    coverableTiltEnd: int | None = None
     # coverablePostRunTime: int
     # coverableCalibration: dict
+
 
 class PlejdDeviceOutputSetting(PlejdObject):
     deviceId: str
@@ -173,6 +176,7 @@ class PlejdDeviceOutputSetting(PlejdObject):
     coverableSettings: CoverableSettings | None = None
     # minimumRelayOffTime: int = None
 
+
 class MotionSensor(PlejdObject):
     deviceId: str
     siteId: str
@@ -181,6 +185,7 @@ class MotionSensor(PlejdObject):
     # dirty: bool
     # dirtyRemove: bool
     # active: bool
+
 
 class SceneStep(PlejdObject):
     sceneId: str
@@ -219,7 +224,7 @@ class SiteDetails(BaseModel):
     inputSettings: list[PlejdDeviceInputSetting]
     outputSettings: list[PlejdDeviceOutputSetting]
     motionSensors: list[MotionSensor]
-    rxAddress: dict[str, dict[str, int]]|None
+    rxAddress: dict[str, dict[str, int]] | None
     # stateTimers: dict
     # sitePermission: SitePermission
     inputAddress: dict[str, dict[str, int]]
@@ -230,13 +235,14 @@ class SiteDetails(BaseModel):
     sceneIndex: dict[str, int]
     deviceLimit: int
 
-
     def find_plejdDevice(self, deviceId: str) -> PlejdDevice:
         for d in self.plejdDevices:
             if d.deviceId == deviceId:
                 return d
 
-    def find_outputSettings(self, deviceId: str, output: int) -> PlejdDeviceOutputSetting:
+    def find_outputSettings(
+        self, deviceId: str, output: int
+    ) -> PlejdDeviceOutputSetting:
         for d in self.outputSettings:
             if d.deviceId == deviceId and d.output == output:
                 return d
@@ -246,12 +252,14 @@ class SiteDetails(BaseModel):
             if d.deviceId == deviceId and d.input == input:
                 return d
 
-    def find_motionSensorData(self, deviceId: str|None, input: int) -> MotionSensor:
+    def find_motionSensorData(self, deviceId: str | None, input: int) -> MotionSensor:
         for d in self.motionSensors:
             if d.deviceId == deviceId and d.input == input:
                 return d
 
-    def find_device(self, deviceId: str|None = None, objectId: str|None = None) -> Device:
+    def find_device(
+        self, deviceId: str | None = None, objectId: str | None = None
+    ) -> Device:
         for d in self.devices:
             if objectId is not None and d.objectId == objectId:
                 return d

@@ -18,6 +18,7 @@ from . import payload_encode
 # from .payload_encode import payload_encode_state, payload_encode_scene, payload_encode_time, payload_request_time
 from .parse_data import parse_data
 from .parse_lightlevel import parse_lightlevel
+
 _LOGGER = logging.getLogger(__name__)
 _DEVLOGGER = logging.getLogger("pyplejd.dev")
 
@@ -47,7 +48,9 @@ class PlejdMesh:
             self._connectable_nodes.add(BLEaddress.replace(":", "").upper())
 
     def see_device(self, node: BLEDevice, rssi: int):
-        _LOGGER.debug(f"Saw device {node} (rssi: {rssi}, prev: {self._seen_nodes.get(node, -1e6)})")
+        _LOGGER.debug(
+            f"Saw device {node} (rssi: {rssi}, prev: {self._seen_nodes.get(node, -1e6)})"
+        )
         self._seen_nodes[node] = max(rssi, self._seen_nodes.get(node, -1e6))
 
     def set_key(self, key: str):
@@ -96,8 +99,16 @@ class PlejdMesh:
             self._publish(self._connect_listeners, {"connected": False})
 
         # Try to connect to nodes in order of decreasing RSSI
-        filtered_nodes = dict(filter(lambda n: n[0].address.replace(":", "").upper() in self._connectable_nodes, self._seen_nodes.items()))
-        sorted_nodes = dict(sorted(filtered_nodes.items(), key=lambda n: n[1], reverse=True))
+        filtered_nodes = dict(
+            filter(
+                lambda n: n[0].address.replace(":", "").upper()
+                in self._connectable_nodes,
+                self._seen_nodes.items(),
+            )
+        )
+        sorted_nodes = dict(
+            sorted(filtered_nodes.items(), key=lambda n: n[1], reverse=True)
+        )
 
         if not sorted_nodes:
             _LOGGER.debug(
@@ -136,7 +147,6 @@ class PlejdMesh:
 
             if "button" in retval:
                 await self._write(payload_encode.request_button(self))
-
 
         async def _lightlevel_listener(_, lightlevel: bytearray):
             for state in parse_lightlevel(lightlevel):
@@ -211,7 +221,9 @@ class PlejdMesh:
                 for payload in payloads:
                     _LOGGER.debug("Writing to plejd mesh: %s", payload.hex())
                     # data = encrypt_decrypt(self._crypto_key, self._gateway_node, payload)
-                    await self._client.write_gatt_char(PLEJD_DATA, payload, response=True)
+                    await self._client.write_gatt_char(
+                        PLEJD_DATA, payload, response=True
+                    )
         except (BleakError, asyncio.TimeoutError) as e:
             _LOGGER.warning("Writing to plejd mesh failed: %s", str(e))
             return False
@@ -249,4 +261,3 @@ class PlejdMesh:
         except (BleakError, asyncio.TimeoutError) as e:
             _LOGGER.warning("Plejd mesh authentication failed: %s", str(e))
         return False
-
