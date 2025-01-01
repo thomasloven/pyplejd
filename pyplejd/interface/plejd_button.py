@@ -10,3 +10,8 @@ class PlejdButton(PlejdInput):
     @property
     def button_id(self):
         return self.settings.input
+
+    def parse_state(self, update, state):
+        state = {**state}
+        self._state["action"] = None # Don't save the action
+        return state

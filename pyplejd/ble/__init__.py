@@ -34,7 +34,6 @@ class PlejdMesh:
 
         self._connect_listeners = set()
         self._state_listeners = set()
-        self._scene_listeners = set()
 
         self._ble_lock = asyncio.Lock()
 
@@ -72,9 +71,6 @@ class PlejdMesh:
 
     def subscribe_state(self, listener: Callable):
         return self._subscribe(self._state_listeners, listener)
-
-    def subscribe_scene(self, listener: Callable):
-        return self._subscribe(self._scene_listeners, listener)
 
     async def disconnect(self):
         if not self._client:
@@ -136,10 +132,7 @@ class PlejdMesh:
             data = encrypt_decrypt(self._crypto_key, self._gateway_node, lastdata)
             retval = parse_data(data)
 
-            if "scene" in retval:
-                self._publish(self._scene_listeners, retval)
-            else:
-                self._publish(self._state_listeners, retval)
+            self._publish(self._state_listeners, retval)
 
             if "button" in retval:
                 await self._write(payload_encode.request_button(self))

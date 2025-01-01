@@ -4,8 +4,6 @@ LOGGER = logging.getLogger(__name__)
 
 def log_command(message, addr = None):
     logger = LOGGER.debug
-    if addr == 13:
-        logger = LOGGER.error
     if addr:
         logger(f"({addr:>3}) - " + message)
     else:
@@ -24,11 +22,12 @@ def parse_data(data: bytearray):
             # Scene update
             log_command(f"SCENE UPDATGE {extra}", "SCN")
 
-        case [0x02, 0x01, 0x10, 0x00, 0x21, scene, *extra]:
+        case [0x00, 0x01, 0x10, 0x00, 0x21, scene, *extra]:
             # Scene triggered
             log_command(f"SCENE TRIGGER {scene=} {extra=}", "SCN")
             return {
-                "scene": scene
+                "scene": scene,
+                "triggered": True,
             }
 
 
@@ -42,7 +41,7 @@ def parse_data(data: bytearray):
             return {
                 "address": addr,
                 "button": button,
-                "released": (not bool(extra[0])) if len(extra) else None,
+                "action": "release" if len(extra) and not extra[0] else "press",
             }
 
         case [addr, 0x01, 0x10, 0x00, 0xC8, state, dim1, dim2, *extra] | [addr, 0x01, 0x10, 0x00, 0x98, state, dim1, dim2, *extra]:

@@ -76,6 +76,10 @@ class PlejdBaseDevice:
         return self.deviceData.deviceId
 
     @property
+    def connectable(self):
+        return PlejdTraits.POWER in self.capabilities
+
+    @property
     def name(self):
         return self.deviceData.title
 

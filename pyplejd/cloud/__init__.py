@@ -168,7 +168,7 @@ class PlejdCloudSite:
                 }
 
     @property
-    def inputs(self) -> Generator[tuple, None, None]:
+    def inputs(self) -> Generator[dict, None, None]:
         details = self.details
         if not details:
             raise RuntimeError("No site details have been fetched")
@@ -202,22 +202,13 @@ class PlejdCloudSite:
                 }
 
     @property
-    def scenes(self) -> list[PlejdScene]:
+    def scenes(self) -> Generator[dict, None, None]:
         if not self.details:
             raise RuntimeError("No site details have been fetched")
-        retval = []
+
         details = self.details
         for scene in details.scenes:
-            hidden = scene.hiddenFromSceneList
-            sceneId = scene.sceneId
-            title = scene.title
-            index = details.sceneIndex.get(sceneId, -1)
-            retval.append(
-                PlejdScene(sceneId=sceneId, title=title, index=index, hidden=hidden)
-            )
-            # yield {
-            #     "scene": scene,
-            #     index: details.sceneIndex.get(scene.sceneId, -1)
-            # }
-
-        return retval
+            yield {
+                "scene": scene,
+                "index": details.sceneIndex.get(scene.sceneId, -1)
+            }

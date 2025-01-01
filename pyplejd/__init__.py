@@ -10,10 +10,8 @@ from .cloud import PlejdCloudSite
 
 from .const import PLEJD_SERVICE, LIGHT, SENSOR, MOTION, SWITCH, COVERABLE, UNKNOWN
 from .errors import AuthenticationError, ConnectionError
-from .interface import PlejdCloudCredentials, PlejdTraits, outputDeviceClass, inputDeviceClass
+from .interface import PlejdCloudCredentials, outputDeviceClass, inputDeviceClass, PlejdDevice, PlejdScene
 
-if TYPE_CHECKING:
-    from .interface import PlejdDevice, PlejdScene
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,8 +24,7 @@ class PlejdManager:
     def __init__(self, credentials: PlejdCloudCredentials):
         self.credentials: PlejdCloudCredentials = credentials
         self.mesh = PlejdMesh(self)
-        self.devices: list[PlejdDevice] = []
-        self.scenes: list[PlejdScene] = []
+        self.devices: list[PlejdDevice|PlejdScene] = []
         self.cloud = PlejdCloudSite(**credentials)
         self.options = {}
 
@@ -38,7 +35,6 @@ class PlejdManager:
 
         self.mesh.subscribe_connect(self._update_connected)
         self.mesh.subscribe_state(self._update_device)
-        self.mesh.subscribe_scene(self._update_scene)
 
         _LOGGER.debug("Output Devices:")
         for device in self.cloud.outputs:
@@ -46,7 +42,7 @@ class PlejdManager:
             dev = cls(**device, mesh=self.mesh)
             _LOGGER.debug(dev)
             self.devices.append(dev)
-            self.mesh.expect_device(dev.BLEaddress, PlejdTraits.POWER in dev.capabilities)
+            self.mesh.expect_device(dev.BLEaddress, dev.connectable)
 
         _LOGGER.debug("Input Devices:")
         for device in self.cloud.inputs:
@@ -54,13 +50,13 @@ class PlejdManager:
             dev = cls(**device, mesh=self.mesh)
             _LOGGER.debug(dev)
             self.devices.append(dev)
-            self.mesh.expect_device(dev.BLEaddress, PlejdTraits.POWER in dev.capabilities)
+            self.mesh.expect_device(dev.BLEaddress, dev.connectable)
 
         _LOGGER.debug("Scenes:")
-        self.scenes = self.cloud.scenes
-        for s in self.scenes:
-            _LOGGER.debug(s)
-            s.connect_mesh(self.mesh)
+        for scene in self.cloud.scenes:
+            scn = PlejdScene(**scene, mesh=self.mesh)
+            _LOGGER.debug(scn)
+            self.devices.append(scn)
 
     def add_mesh_device(self, device, rssi):
         return self.mesh.see_device(device, rssi)
@@ -87,11 +83,6 @@ class PlejdManager:
         for d in self.devices:
             if d.match_state(state):
                 d.update_state(**state)
-
-    def _update_scene(self, state):
-        for s in self.scenes:
-            if s.index == state["scene"]:
-                s.activated()
 
     @property
     def ping_interval(self):
