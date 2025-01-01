@@ -64,7 +64,7 @@ class PlejdManager:
             _LOGGER.debug(scn)
             self.devices.append(scn)
 
-    def add_mesh_device(self, device, rssi):
+    def add_mesh_device(self, device, rssi) -> bool:
         return self.mesh.see_device(device, rssi)
 
     async def close_stale(self, device):

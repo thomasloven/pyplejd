@@ -47,11 +47,13 @@ class PlejdMesh:
         if connectable:
             self._connectable_nodes.add(BLEaddress.replace(":", "").upper())
 
-    def see_device(self, node: BLEDevice, rssi: int):
+    def see_device(self, node: BLEDevice, rssi: int) -> bool:
         _LOGGER.debug(
             f"Saw device {node} (rssi: {rssi}, prev: {self._seen_nodes.get(node, -1e6)})"
         )
+        new_device = node not in self._seen_nodes
         self._seen_nodes[node] = max(rssi, self._seen_nodes.get(node, -1e6))
+        return new_device
 
     def set_key(self, key: str):
         self._crypto_key = key
