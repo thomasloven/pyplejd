@@ -10,7 +10,7 @@ from bleak.backends.device import BLEDevice
 from bleak_retry_connector import establish_connection
 
 from .crypto import auth_response, encrypt_decrypt
-from . import ble_characteristics as char
+from . import ble_characteristics as gatt
 from . import payload_encode
 from .parse_data import parse_data
 from .parse_lightlevel import parse_lightlevel
@@ -78,8 +78,8 @@ class PlejdMesh:
         if not self._client:
             return False
         try:
-            await self._client.stop_notify(char.PLEJD_LASTDATA)
-            await self._client.stop_notify(char.PLEJD_LIGHTLEVEL)
+            await self._client.stop_notify(gatt.PLEJD_LASTDATA)
+            await self._client.stop_notify(gatt.PLEJD_LIGHTLEVEL)
             await self._client.disconnect()
         except BleakError:
             pass
@@ -151,8 +151,8 @@ class PlejdMesh:
             for state in parse_lightlevel(lightlevel):
                 self._publish(self._state_listeners, state)
 
-        await client.start_notify(char.PLEJD_LASTDATA, _lastdata_listener)
-        await client.start_notify(char.PLEJD_LIGHTLEVEL, _lightlevel_listener)
+        await client.start_notify(gatt.PLEJD_LASTDATA, _lastdata_listener)
+        await client.start_notify(gatt.PLEJD_LIGHTLEVEL, _lightlevel_listener)
         self._client = client
 
         self._publish(self._connect_listeners, {"connected": True})
@@ -164,7 +164,7 @@ class PlejdMesh:
         if client is None:
             return
         _LOGGER.debug("Polling mesh for current state")
-        await client.write_gatt_char(char.PLEJD_LIGHTLEVEL, b"\x01", response=True)
+        await client.write_gatt_char(gatt.PLEJD_LIGHTLEVEL, b"\x01", response=True)
 
     async def ping(self):
         async with self._ble_lock:
@@ -190,7 +190,7 @@ class PlejdMesh:
         payloads = payload_encode.request_time(self, address)
         await self._write(payloads)
 
-        retval = await client.read_gatt_char(char.PLEJD_LASTDATA)
+        retval = await client.read_gatt_char(gatt.PLEJD_LASTDATA)
         data = encrypt_decrypt(self._crypto_key, self._gateway_node, retval)
         ts = int.from_bytes(data[5:9], "little")
         dt = datetime.fromtimestamp(ts)
@@ -214,7 +214,7 @@ class PlejdMesh:
                 for payload in payloads:
                     _LOGGER.debug("Writing to plejd mesh: %s", payload.hex())
                     await self._client.write_gatt_char(
-                        char.PLEJD_DATA, payload, response=True
+                        gatt.PLEJD_DATA, payload, response=True
                     )
         except (BleakError, asyncio.TimeoutError) as e:
             _LOGGER.warning("Writing to plejd mesh failed: %s", str(e))
@@ -227,8 +227,8 @@ class PlejdMesh:
         try:
             ping = bytearray(os.urandom(1))
             _LOGGER.debug("Ping(%s)", int.from_bytes(ping, "little"))
-            await client.write_gatt_char(char.PLEJD_PING, ping, response=True)
-            pong = await client.read_gatt_char(char.PLEJD_PING)
+            await client.write_gatt_char(gatt.PLEJD_PING, ping, response=True)
+            pong = await client.read_gatt_char(gatt.PLEJD_PING)
             _LOGGER.debug("Pong(%s)", int.from_bytes(pong, "little"))
             if (ping[0] + 1) & 0xFF == pong[0]:
                 return True
@@ -241,10 +241,10 @@ class PlejdMesh:
             return False
         try:
             _LOGGER.debug("Authenticating with plejd mesh")
-            await client.write_gatt_char(char.PLEJD_AUTH, b"\0x00", response=True)
-            challenge = await client.read_gatt_char(char.PLEJD_AUTH)
+            await client.write_gatt_char(gatt.PLEJD_AUTH, b"\0x00", response=True)
+            challenge = await client.read_gatt_char(gatt.PLEJD_AUTH)
             response = auth_response(self._crypto_key, challenge)
-            await client.write_gatt_char(char.PLEJD_AUTH, response, response=True)
+            await client.write_gatt_char(gatt.PLEJD_AUTH, response, response=True)
             if not await self._ping(client):
                 _LOGGER.debug("Authentication failed!")
                 return False

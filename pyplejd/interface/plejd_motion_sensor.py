@@ -8,10 +8,10 @@ class PlejdMotionSensor(PlejdInput):
         self.outputType = "MOTION"
 
         self.cooldown = None
-        # Motion sensors seem to timeout at just below 30 seconds
+        # Motion sensors seem to timeout at 25-35 seconds
         # by the Nyquist criteria, we need our timeout to be at least
         # twice that time in order not to significantly miss any events.
-        self.timeout = 65
+        self.timeout = 75
 
     def parse_state(self, update, state):
         state = {**state}
