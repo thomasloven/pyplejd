@@ -1,58 +1,35 @@
 from __future__ import annotations
-from enum import Enum
 
-try:
-    from pydantic.v1 import BaseModel, PrivateAttr
-except ImportError:
-    from pydantic import BaseModel, PrivateAttr
-from typing import Literal, TYPE_CHECKING, Callable, TypedDict, Type
-from ..cloud import site_details as sd, PlejdEntityData
+from typing import TypedDict, Type
 
-from .plejd_device import PlejdBaseDevice as PlejdDevice
-from .plejd_light import PlejdLight
-from .plejd_relay import PlejdRelay
-from .plejd_cover import PlejdCover
-from .plejd_motion_sensor import PlejdMotionSensor
-from .plejd_button import PlejdButton
-from .plejd_fellowship_follower import PlejdFellowshipFollower
-from .plejd_scene import PlejdScene
+from . import device_type as DeviceTypes
+from ..cloud import PlejdEntityData, PlejdSceneData
 
-from .device_type import PlejdDeviceType
-
-if TYPE_CHECKING:
-    from ..ble import PlejdMesh
+dt = DeviceTypes
 
 
-class PlejdCloudCredentials(TypedDict):
-    username: str
-    password: str
-    siteId: str
-
-
-class PlejdSiteSummary(BaseModel):
-    title: str
-    deviceCount: int
-    siteId: str
-
-
-def outputDeviceClass(device: PlejdEntityData) -> Type[PlejdDevice]:
+def outputDeviceClass(device: PlejdEntityData) -> Type[dt.PlejdDevice]:
 
     if device["plejdDevice"].isFellowshipFollower:
-        return PlejdFellowshipFollower
+        return dt.PlejdFellowshipFollower
 
     tpe = device["device"].outputType
     if tpe == "LIGHT":
-        return PlejdLight
+        return dt.PlejdLight
     if tpe == "RELAY":
-        return PlejdRelay
+        return dt.PlejdRelay
     if tpe == "COVERABLE":
-        return PlejdCover
+        return dt.PlejdCover
 
-    return PlejdDevice
+    return dt.PlejdDevice
 
 
-def inputDeviceClass(device: PlejdEntityData) -> Type[PlejdDevice]:
+def inputDeviceClass(device: PlejdEntityData) -> Type[dt.PlejdDevice]:
     if device["motion"]:
-        return PlejdMotionSensor
-    return PlejdButton
+        return dt.PlejdMotionSensor
+    return dt.PlejdButton
     return PlejdDevice
+
+
+def sceneDeviceClass(device: PlejdSceneData) -> Type[dt.PlejdDevice]:
+    return dt.PlejdScene

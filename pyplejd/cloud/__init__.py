@@ -3,12 +3,9 @@ import aiohttp
 import logging
 from typing import Generator, TypedDict
 
-from .site_details import User, SiteDetails
+from . import site_details as sd
 from .site_list import SiteListItem
-from .types import PlejdSiteSummary, PlejdEntityData, PlejdSceneData
 
-from ..interface import PlejdScene
-from .. import const
 from ..errors import AuthenticationError, ConnectionError
 
 _LOGGER = logging.getLogger(__name__)
@@ -26,6 +23,27 @@ headers = {
 }
 
 
+class PlejdSiteSummary(TypedDict):
+    title: str
+    deviceCount: int
+    siteId: str
+
+
+class PlejdEntityData(TypedDict):
+    address: int
+    deviceAddress: int
+    device: sd.Device
+    plejdDevice: sd.PlejdDevice
+    settings: sd.PlejdDeviceOutputSetting | sd.PlejdDeviceInputSetting
+    room: sd.Room
+    motion: bool | None
+
+
+class PlejdSceneData(TypedDict):
+    scene: sd.Scene
+    index: int
+
+
 async def _set_session_token(session: ClientSession, username: str, password: str):
     resp = await session.post(
         API_LOGIN_URL,
@@ -39,9 +57,8 @@ async def _set_session_token(session: ClientSession, username: str, password: st
             _LOGGER.debug("Authentication failed for unknown reason. No internet?")
             raise ConnectionError
     data = await resp.json()
-    user = User(**data)
+    user = sd.User(**data)
     session.headers["X-Parse-Session-Token"] = user.sessionToken
-    return True
 
 
 class PlejdCloudSite:
@@ -49,8 +66,8 @@ class PlejdCloudSite:
         self.username = username
         self.password = password
         self.siteId = siteId
-        self.details: SiteDetails = None
-        self._details_raw = None
+        self.details: sd.SiteDetails = None
+        self._details_raw: str | None = None
 
     @staticmethod
     async def verify_credentials(username, password) -> bool:
@@ -59,7 +76,7 @@ class PlejdCloudSite:
             return True
 
     @staticmethod
-    async def get_sites(username, password) -> list[PlejdSiteSummary]:
+    async def get_sites(username: str, password: str) -> list[PlejdSiteSummary]:
         try:
             async with ClientSession(base_url=API_BASE_URL, headers=headers) as session:
                 await _set_session_token(session, username, password)
@@ -67,17 +84,17 @@ class PlejdCloudSite:
                 data = await resp.json()
                 sites = [SiteListItem(**s) for s in data["result"]]
                 return [
-                    PlejdSiteSummary(
-                        siteId=site.site.siteId,
-                        title=site.site.title,
-                        deviceCount=len(site.plejdDevice),
-                    )
+                    {
+                        "siteId": site.site.siteId,
+                        "title": site.site.title,
+                        "deviceCount": len(site.plejdDevice),
+                    }
                     for site in sites
                 ]
         except aiohttp.ClientError as err:
             raise ConnectionError from err
 
-    async def get_details(self):
+    async def get_details(self) -> None:
         try:
             async with ClientSession(base_url=API_BASE_URL, headers=headers) as session:
                 await _set_session_token(session, self.username, self.password)
@@ -88,25 +105,25 @@ class PlejdCloudSite:
                 )
                 data = await resp.json()
                 self._details_raw = data["result"][0]
-                self.details = SiteDetails(**data["result"][0])
+                self.details = sd.SiteDetails(**data["result"][0])
         except aiohttp.ClientError as err:
             raise ConnectionError from err
 
-    async def load_site_details(self, backup=None):
+    async def load_site_details(self, backup=None) -> None:
         try:
             await self.get_details()
         except (AuthenticationError, ConnectionError) as err:
             if backup:
                 _LOGGER.debug("Loading site data failed. Reverting to back-up.")
                 self._details_raw = backup
-                self.details = SiteDetails(**backup)
+                self.details = sd.SiteDetails(**backup)
             else:
                 raise err
 
         _LOGGER.debug("Site data loaded")
         _LOGGER.debug(("Mesh Devices:", self.mesh_devices))
 
-    async def get_raw_details(self):
+    async def get_raw_details(self) -> str | None:
         try:
             await self.get_details()
         except (AuthenticationError, ConnectionError):
@@ -114,13 +131,15 @@ class PlejdCloudSite:
         return self._details_raw
 
     @classmethod
-    async def create(cls, username, password, siteId):
+    async def create(
+        cls, username: str, password: str, siteId: str
+    ) -> "PlejdCloudSite":
         self = PlejdCloudSite(username, password, siteId)
         await self.get_details()
         return self
 
     @property
-    def cryptokey(self):
+    def cryptokey(self) -> str:
         if not self.details:
             raise RuntimeError("No site details have been fetched")
         return self.details.plejdMesh.cryptoKey
@@ -169,7 +188,7 @@ class PlejdCloudSite:
                 }
 
     @property
-    def inputs(self) -> Generator[dict, None, None]:
+    def inputs(self) -> Generator[PlejdSceneData, None, None]:
         details = self.details
         if not details:
             raise RuntimeError("No site details have been fetched")

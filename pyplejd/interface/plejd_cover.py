@@ -1,5 +1,4 @@
 from .plejd_device import PlejdOutput
-from .device_type import PlejdDeviceType
 
 
 class PlejdCover(PlejdOutput):

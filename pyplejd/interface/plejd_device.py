@@ -1,7 +1,6 @@
 from __future__ import annotations
 from enum import IntFlag
 from ..cloud import site_details as sd
-from .device_type import PlejdDeviceType
 
 from typing import TYPE_CHECKING
 
@@ -19,7 +18,7 @@ class PlejdTraits(IntFlag):
     TILT = 0x40
 
 
-class PlejdBaseDevice:
+class PlejdDevice:
     def __init__(
         self,
         address: int,
@@ -44,7 +43,8 @@ class PlejdBaseDevice:
 
         self._listeners = set()
 
-        self.outputType = PlejdDeviceType.UNKNOWN
+        self.outputType = "UNKNOWN"
+        self.identifier = None
         self.device_identifier = (plejdDevice.deviceId, device.objectId)
         self.capabilities = PlejdTraits(self.deviceData.traits)
 
@@ -79,7 +79,7 @@ class PlejdBaseDevice:
         return self.deviceData.deviceId
 
     @property
-    def connectable(self):
+    def powered(self):
         return PlejdTraits.POWER in self.capabilities
 
     @property
@@ -105,7 +105,7 @@ class PlejdBaseDevice:
         return self.plejdDevice.firmware.version
 
 
-class PlejdOutput(PlejdBaseDevice):
+class PlejdOutput(PlejdDevice):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -114,7 +114,7 @@ class PlejdOutput(PlejdBaseDevice):
         self.identifier = (self.plejdDevice.deviceId, "O", str(self.settings.output))
 
 
-class PlejdInput(PlejdBaseDevice):
+class PlejdInput(PlejdDevice):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -122,7 +122,7 @@ class PlejdInput(PlejdBaseDevice):
         self.identifier = (self.plejdDevice.deviceId, "I", str(self.settings.input))
 
     def match_state(self, state):
-        if "button in state":
+        if "button" in state:
             if (
                 state.get("address") == self.deviceAddress
                 and state.get("button") == self.settings.input

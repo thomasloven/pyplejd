@@ -1,6 +1,5 @@
 from __future__ import annotations
 from ..cloud import site_details as sd
-from .device_type import PlejdDeviceType
 
 from typing import TYPE_CHECKING
 
@@ -27,7 +26,7 @@ class PlejdScene:
 
         self._listeners = set()
 
-        self.outputType = PlejdDeviceType.SCENE
+        self.outputType = "SCENE"
         self.identifier = self.scene.sceneId
 
     def __repr__(self):
@@ -68,3 +67,7 @@ class PlejdScene:
     @property
     def hidden(self):
         return self.scene.hiddenFromSceneList
+
+    @property
+    def powered(self):
+        return False

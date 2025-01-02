@@ -1,25 +1,35 @@
 from __future__ import annotations
 import logging
 from datetime import timedelta
-from typing import TYPE_CHECKING
+from typing import TypedDict
 
 from bleak_retry_connector import close_stale_connections
 
-from .ble import PlejdMesh
+from .ble import PlejdMesh, PLEJD_SERVICE
 from .cloud import PlejdCloudSite
 
-from .const import PLEJD_SERVICE, LIGHT, SENSOR, MOTION, SWITCH, COVERABLE, UNKNOWN
 from .errors import AuthenticationError, ConnectionError
 from .interface import (
-    PlejdCloudCredentials,
     outputDeviceClass,
     inputDeviceClass,
-    PlejdDevice,
-    PlejdScene,
+    sceneDeviceClass,
+    DeviceTypes,
 )
 
 
+__all__ = [
+    "PlejdManager",
+    "get_sites",
+    "verify_credentials",
+    "DeviceTypes",
+    "AuthenticationError",
+    "ConnectionError",
+    "PLEJD_SERVICE",
+]
+
+
 _LOGGER = logging.getLogger(__name__)
+dt = DeviceTypes
 
 
 get_sites = PlejdCloudSite.get_sites
@@ -27,11 +37,16 @@ verify_credentials = PlejdCloudSite.verify_credentials
 
 
 class PlejdManager:
-    def __init__(self, credentials: PlejdCloudCredentials):
-        self.credentials: PlejdCloudCredentials = credentials
+    def __init__(self, username: str, password: str, siteId: str):
+        self.credentials = {
+            "username": username,
+            "password": password,
+            "siteId": siteId,
+        }
+
         self.mesh = PlejdMesh(self)
-        self.devices: list[PlejdDevice | PlejdScene] = []
-        self.cloud = PlejdCloudSite(**credentials)
+        self.devices: list[dt.PlejdDevice | dt.PlejdScene] = []
+        self.cloud = PlejdCloudSite(**self.credentials)
         self.options = {}
 
     async def init(self, sitedata=None):
@@ -48,7 +63,7 @@ class PlejdManager:
             dev = cls(**device, mesh=self.mesh)
             _LOGGER.debug(dev)
             self.devices.append(dev)
-            self.mesh.expect_device(dev.BLEaddress, dev.connectable)
+            self.mesh.expect_device(dev.BLEaddress, dev.powered)
 
         _LOGGER.debug("Input Devices:")
         for device in self.cloud.inputs:
@@ -56,11 +71,12 @@ class PlejdManager:
             dev = cls(**device, mesh=self.mesh)
             _LOGGER.debug(dev)
             self.devices.append(dev)
-            self.mesh.expect_device(dev.BLEaddress, dev.connectable)
+            self.mesh.expect_device(dev.BLEaddress, dev.powered)
 
         _LOGGER.debug("Scenes:")
         for scene in self.cloud.scenes:
-            scn = PlejdScene(**scene, mesh=self.mesh)
+            cls = sceneDeviceClass(scene)
+            scn = cls(**scene, mesh=self.mesh)
             _LOGGER.debug(scn)
             self.devices.append(scn)
 
@@ -100,7 +116,7 @@ class PlejdManager:
 
     async def broadcast_time(self):
         for d in self.devices:
-            if d.outputType in [LIGHT, SWITCH]:
+            if d.powered:
                 if await self.mesh.poll_time(d.address):
                     await self.mesh.broadcast_time()
                     return

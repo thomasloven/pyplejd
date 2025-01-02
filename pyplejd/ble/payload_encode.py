@@ -10,10 +10,6 @@ if typing.TYPE_CHECKING:
 
 from .crypto import encrypt_decrypt
 
-import logging
-
-LOGGER = logging.getLogger(__name__)
-
 
 def encode(mesh: PlejdMesh, payloads: list[str]):
     return [
@@ -60,7 +56,6 @@ def set_state(mesh: PlejdMesh, address, **state):
             # AA 0110 0420 030827 01 PPPP
             payloads.append(f"{address:02x} 0110 0420 030827 01 {cover:04x}")
 
-    LOGGER.error(payloads)
     return encode(mesh, payloads)
 
 
