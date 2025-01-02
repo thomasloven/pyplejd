@@ -1,3 +1,4 @@
+import asyncio
 from .plejd_device import PlejdInput
 
 
@@ -6,7 +7,24 @@ class PlejdMotionSensor(PlejdInput):
         super().__init__(*args, **kwargs)
         self.outputType = "MOTION"
 
+        self.cooldown = None
+        # Motion sensors seem to timeout at just below 30 seconds
+        # by the Nyquist criteria, we need our timeout to be at least
+        # twice that time in order not to significantly miss any events.
+        self.timeout = 65
+
     def parse_state(self, update, state):
         state = {**state}
+        if state.get("motion", False):
+            if self.cooldown:
+                self.cooldown()
+                self.cooldown = None
+
+            def _callback():
+                self.update_state(motion=False)
+
+            loop = asyncio.get_running_loop()
+            self.cooldown = loop.call_at(loop.time() + self.timeout, _callback).cancel
+
         self._state["motion"] = None
         return state
