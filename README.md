@@ -13,14 +13,6 @@ Contributors not listed in git history - in no particular order:
 
 ---
 
-Notes for my memory:
-
-```
-> python setup.py sdist
-> pip install twine
-> twine upload -r pypi --config-file .pypirc dist/\*
-```
-
 Much information below is taken from here: https://github.com/icanos/hassio-plejd/issues/163
 
 Other things I have disocvered myself
