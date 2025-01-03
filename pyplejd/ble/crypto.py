@@ -6,7 +6,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 
 
-def encrypt_decrypt(key: str, addr: str, data: bytearray) -> bytearray:
+def encrypt_decrypt(key: str, addr: str, data: bytearray) -> bytes:
     key = binascii.a2b_hex(key.replace("-", ""))
     addr = binascii.a2b_hex(addr.replace("-", "").replace(":", ""))[::-1]
 

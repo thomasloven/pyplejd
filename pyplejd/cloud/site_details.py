@@ -2,7 +2,6 @@ try:
     from pydantic.v1 import BaseModel
 except ImportError:
     from pydantic import BaseModel
-from .. import const
 
 
 # Parameters are read from my own test site data. There may be more or fewer parameters in some objects
@@ -135,6 +134,7 @@ class PredefinedLoad(PlejdObject):
     # defaultDimCurve: dict
     # allowedDimCurves: dict
 
+
 class ColorTemperature(BaseModel):
     minTemperature: int
     maxTemperature: int
@@ -143,6 +143,7 @@ class ColorTemperature(BaseModel):
     # maxTemperatureLimit: int
     behavior: str
     # startTemperature: int
+
 
 class PlejdDeviceOutputSetting(PlejdObject):
     deviceId: str
@@ -201,7 +202,7 @@ class SiteDetails(BaseModel):
     inputSettings: list[PlejdDeviceInputSetting]
     outputSettings: list[PlejdDeviceOutputSetting]
     motionSensors: list
-    rxAddress: dict[str, dict[str, int]]|None
+    rxAddress: dict[str, dict[str, int]] | None
     # stateTimers: dict
     # sitePermission: SitePermission
     inputAddress: dict[str, dict[str, int]]
