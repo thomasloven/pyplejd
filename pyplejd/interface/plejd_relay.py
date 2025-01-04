@@ -14,9 +14,9 @@ class PlejdRelay(PlejdOutput):
     async def turn_on(self):
         if not self._mesh:
             return
-        await self._mesh.set_state(self.address, True)
+        await self._mesh.set_state(self.address, state=True)
 
     async def turn_off(self):
         if not self._mesh:
             return
-        await self._mesh.set_state(self.address, False)
+        await self._mesh.set_state(self.address, state=False)

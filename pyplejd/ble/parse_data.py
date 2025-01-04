@@ -130,6 +130,6 @@ def parse_data(data: bytearray):
         case _:
             # Unknown command
             rec_log(f"UNKNOWN {data=}")
-            rec_log(f"    {data_hex}", addr)
+            rec_log(f"    {data_hex}")
 
     return {}

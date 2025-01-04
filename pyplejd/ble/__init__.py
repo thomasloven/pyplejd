@@ -154,7 +154,7 @@ class PlejdMesh:
             self._publish(self._state_listeners, retval)
 
             if "button" in retval:
-                await self._write(payload_encode.request_button(self))
+                await self.poll_buttons()
 
         async def _lightlevel_listener(_, lightlevel: bytearray):
             for state in parse_lightlevel(lightlevel):
@@ -175,14 +175,19 @@ class PlejdMesh:
         _LOGGER.debug("Polling mesh for current state")
         await client.write_gatt_char(gatt.PLEJD_LIGHTLEVEL, b"\x01", response=True)
 
+    async def poll_buttons(self):
+        await self._write(payload_encode.request_button(self))
+
     async def ping(self):
         async with self._ble_lock:
             if not await self.connect():
-                return False
+                retval = False
             if await self._ping(self._client):
                 await self.poll()
-                return True
-        return False
+                retval = True
+        if retval:
+            await self.poll_buttons()
+        return retval
 
     async def set_state(self, address: int, **state):
         payloads = payload_encode.set_state(self, address, **state)
