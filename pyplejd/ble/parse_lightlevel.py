@@ -1,6 +1,4 @@
-import logging
-
-LOGGER = logging.getLogger(__name__)
+from .debug import rec_log
 
 
 def parse_lightlevel(data: bytearray):
@@ -13,7 +11,7 @@ def parse_lightlevel(data: bytearray):
         dim = int(ll[6])  # int.from_bytes(ll[5:7], "little")
         cover_position = int.from_bytes(ll[5:7], "little")
 
-        # LOGGER.error(f"LIGHTLEVEL {address=} {state=} {dim=}")
+        rec_log(f"LIGHTLEVEL {state=} {dim=}", address)
 
         yield {
             "address": address,

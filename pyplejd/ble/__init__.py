@@ -17,7 +17,7 @@ from .parse_lightlevel import parse_lightlevel
 from .ble_characteristics import PLEJD_SERVICE
 
 _LOGGER = logging.getLogger(__name__)
-_DEVLOGGER = logging.getLogger("pyplejd.dev")
+_CONNECTION_LOG = logging.getLogger("pyplejd.ble.connection")
 
 
 class PlejdMesh:
@@ -45,7 +45,7 @@ class PlejdMesh:
             self._connectable_nodes.add(BLEaddress.replace(":", "").upper())
 
     def see_device(self, node: BLEDevice, rssi: int) -> bool:
-        _LOGGER.debug(
+        _CONNECTION_LOG.debug(
             f"Saw device {node} (rssi: {rssi}, prev: {self._seen_nodes.get(node, -1e6)})"
         )
         new_device = node not in self._seen_nodes
@@ -87,12 +87,12 @@ class PlejdMesh:
         self._publish(self._connect_listeners, {"connected": False})
 
     async def connect(self):
-        _LOGGER.debug("Trying to connect to mesh")
         if self.connected:
             return True
+        _CONNECTION_LOG.debug("Trying to connect to BLE mesh")
 
         def _disconnect(reason):
-            _LOGGER.debug("_disconnect(%s)", reason)
+            _CONNECTION_LOG.debug("Disconected from BLE mesh (%s)", reason)
             self._client = None
             self._gateway_node = None
             self._publish(self._connect_listeners, {"connected": False})
@@ -109,8 +109,15 @@ class PlejdMesh:
             sorted(filtered_nodes.items(), key=lambda n: n[1], reverse=True)
         )
 
+        _CONNECTION_LOG.debug(f"Expected nodes: {self._expected_nodes}")
+        _CONNECTION_LOG.debug(f"Connectable expected nodes: {self._connectable_nodes}")
+
+        _CONNECTION_LOG.debug(f"Seen nodes: {self._seen_nodes}")
+        _CONNECTION_LOG.debug(f"Connectable, seen nodes: {filtered_nodes}")
+        _CONNECTION_LOG.debug(f"Sorted by signal strength: {sorted_nodes}")
+
         if not sorted_nodes:
-            _LOGGER.debug(
+            _CONNECTION_LOG.debug(
                 "Failed to connect to plejd mesh - No valid devices: %s (%s)",
                 self._seen_nodes,
                 self._connectable_nodes,
@@ -119,7 +126,7 @@ class PlejdMesh:
         client = None
         for node in sorted_nodes:
             try:
-                _LOGGER.debug("Attempting to connect to %s", node)
+                _CONNECTION_LOG.debug("Attempting to connect to %s", node)
                 client = await establish_connection(
                     BleakClient, node, "plejd", _disconnect
                 )
@@ -131,10 +138,12 @@ class PlejdMesh:
                 break
 
             except (BleakError, asyncio.TimeoutError) as e:
-                _LOGGER.warning("Failed to connect to %s: %s", node, str(e))
+                _CONNECTION_LOG.warning("Failed to connect to %s: %s", node, str(e))
 
         else:
-            _LOGGER.warning("Failed to connect to plejd mesh - %s", sorted_nodes)
+            _CONNECTION_LOG.warning(
+                "Failed to connect to plejd mesh - %s", sorted_nodes
+            )
             return False
 
         async def _lastdata_listener(_, lastdata: bytearray):
@@ -240,16 +249,16 @@ class PlejdMesh:
         if client is None:
             return False
         try:
-            _LOGGER.debug("Authenticating with plejd mesh")
+            _CONNECTION_LOG.debug("Authenticating with plejd mesh")
             await client.write_gatt_char(gatt.PLEJD_AUTH, b"\0x00", response=True)
             challenge = await client.read_gatt_char(gatt.PLEJD_AUTH)
             response = auth_response(self._crypto_key, challenge)
             await client.write_gatt_char(gatt.PLEJD_AUTH, response, response=True)
             if not await self._ping(client):
-                _LOGGER.debug("Authentication failed!")
+                _CONNECTION_LOG.debug("Authentication failed!")
                 return False
-            _LOGGER.debug("Authentication successful")
+            _CONNECTION_LOG.debug("Authentication successful")
             return True
         except (BleakError, asyncio.TimeoutError) as e:
-            _LOGGER.warning("Plejd mesh authentication failed: %s", str(e))
+            _CONNECTION_LOG.warning("Plejd mesh authentication failed: %s", str(e))
         return False

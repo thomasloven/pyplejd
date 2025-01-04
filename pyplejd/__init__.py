@@ -27,8 +27,6 @@ __all__ = [
     "PLEJD_SERVICE",
 ]
 
-
-_LOGGER = logging.getLogger(__name__)
 dt = DeviceTypes
 
 
@@ -57,27 +55,29 @@ class PlejdManager:
         self.mesh.subscribe_connect(self._update_connected)
         self.mesh.subscribe_state(self._update_device)
 
-        _LOGGER.debug("Output Devices:")
+        LOGGER = logging.getLogger("pyplejd.device_list")
+
+        LOGGER.debug("Output Devices:")
         for device in self.cloud.outputs:
             cls = outputDeviceClass(device)
             dev = cls(**device, mesh=self.mesh)
-            _LOGGER.debug(dev)
+            LOGGER.debug(dev)
             self.devices.append(dev)
             self.mesh.expect_device(dev.BLEaddress, dev.powered)
 
-        _LOGGER.debug("Input Devices:")
+        LOGGER.debug("Input Devices:")
         for device in self.cloud.inputs:
             cls = inputDeviceClass(device)
             dev = cls(**device, mesh=self.mesh)
-            _LOGGER.debug(dev)
+            LOGGER.debug(dev)
             self.devices.append(dev)
             self.mesh.expect_device(dev.BLEaddress, dev.powered)
 
-        _LOGGER.debug("Scenes:")
+        LOGGER.debug("Scenes:")
         for scene in self.cloud.scenes:
             cls = sceneDeviceClass(scene)
             scn = cls(**scene, mesh=self.mesh)
-            _LOGGER.debug(scn)
+            LOGGER.debug(scn)
             self.devices.append(scn)
 
     def add_mesh_device(self, device, rssi) -> bool:
