@@ -3,7 +3,7 @@ from .plejd_device import PlejdOutput, PlejdTraits
 
 class PlejdRelay(PlejdOutput):
 
-    def parse_state(self, state):
+    def parse_state(self, update, state):
         available = state.get("available", False)
 
         return {
