@@ -11,10 +11,14 @@ def parse_data(data: bytearray):
             rec_log(f"TIME DATA {extra}", "TME")
             rec_log(f"    {data_hex}", "TME")
 
-        case [0x02, 0x01, 0x10, *extra]:
+        case [0x02, 0x01, 0x10, 0x00, 0x21, scene, *extra]:
             # Scene update
-            rec_log(f"SCENE UPDATGE {extra}", "SCN")
+            rec_log(f"SCENE UPDATE {scene=} {extra=}", "SCN")
             rec_log(f"    {data_hex}", "SCN")
+            return {
+                "scene": scene,
+                "triggered": True,
+            }
 
         case [0x00, 0x01, 0x10, 0x00, 0x21, scene, *extra]:
             # Scene triggered
