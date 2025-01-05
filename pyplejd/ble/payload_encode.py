@@ -98,7 +98,7 @@ def request_time(mesh: PlejdMesh, address):
     # Request time report command
     # AA 0102 001b
 
-    payload: f"{address:02x} 0102 001b"
+    payload = f"{address:02x} 0102 001b"
     send_log(f"TIME REQUEST {hex_payload(payload)}", "TME")
     return encode(mesh, [payload])
 
