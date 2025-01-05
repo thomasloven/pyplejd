@@ -2,7 +2,7 @@
 
 from enum import StrEnum
 
-from .plejd_device import PlejdDevice, PlejdInput, PlejdOutput
+from .plejd_device import PlejdDevice, PlejdInput, PlejdOutput, PlejdTraits
 from .plejd_button import PlejdButton
 from .plejd_cover import PlejdCover
 from .plejd_fellowship_follower import PlejdFellowshipFollower
@@ -23,6 +23,7 @@ __all__ = [
     "PlejdMotionSensor",
     "PlejdRelay",
     "PlejdScene",
+    "PlejdTraits",
 ]
 
 

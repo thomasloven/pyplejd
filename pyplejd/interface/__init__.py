@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TypedDict, Type
+from typing import Type
 
 from . import device_type as DeviceTypes
 from ..cloud import PlejdEntityData, PlejdSceneData
@@ -20,6 +20,15 @@ def outputDeviceClass(device: PlejdEntityData) -> Type[dt.PlejdDevice]:
         return dt.PlejdRelay
     if tpe == "COVERABLE":
         return dt.PlejdCover
+
+    traits = dt.PlejdTraits(device["device"].traits)
+    if dt.PlejdTraits.COVER in traits:
+        return dt.PlejdCover
+    if dt.PlejdTraits.POWER in traits:
+        if notes := device["plejdDevice"].firmware.notes:
+            if "CTR" in notes:
+                return dt.PlejdRelay
+        return dt.PlejdLight
 
     return dt.PlejdDevice
 
