@@ -3,6 +3,10 @@ from .plejd_device import PlejdOutput, PlejdTraits
 
 class PlejdRelay(PlejdOutput):
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.outputType = "SENSOR"
+
     def parse_state(self, update, state):
         available = state.get("available", False)
 

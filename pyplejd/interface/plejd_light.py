@@ -6,6 +6,7 @@ class PlejdLight(PlejdOutput):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        self.outputType = "LIGHT"
         self.dimmable = PlejdTraits.DIM in self.capabilities
 
         self.colortemp = None
