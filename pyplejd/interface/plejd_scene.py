@@ -1,5 +1,6 @@
 from __future__ import annotations
 from ..cloud import site_details as sd
+from .plejd_device import PlejdDeviceType
 
 from typing import TYPE_CHECKING
 
@@ -26,7 +27,7 @@ class PlejdScene:
 
         self._listeners = set()
 
-        self.outputType = "SCENE"
+        self.outputType = PlejdDeviceType.SCENE
         self.identifier = self.scene.sceneId
 
     def __repr__(self):

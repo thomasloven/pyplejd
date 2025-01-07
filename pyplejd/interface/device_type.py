@@ -1,8 +1,12 @@
 """ All device types handled by pyplejd """
 
-from enum import StrEnum
-
-from .plejd_device import PlejdDevice, PlejdInput, PlejdOutput, PlejdTraits
+from .plejd_device import (
+    PlejdDevice,
+    PlejdInput,
+    PlejdOutput,
+    PlejdTraits,
+    PlejdDeviceType,
+)
 from .plejd_button import PlejdButton
 from .plejd_cover import PlejdCover
 from .plejd_fellowship_follower import PlejdFellowshipFollower
@@ -25,13 +29,3 @@ __all__ = [
     "PlejdScene",
     "PlejdTraits",
 ]
-
-
-class PlejdDeviceType(StrEnum):
-    LIGHT = "LIGHT"
-    SWITCH = "RELAY"
-    BUTTON = "SENSOR"
-    MOTION = "MOTION"
-    COVER = "COVERABLE"
-    SCENE = "SCENE"
-    UNKNOWN = "UNKNOWN"

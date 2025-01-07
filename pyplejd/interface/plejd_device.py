@@ -1,5 +1,5 @@
 from __future__ import annotations
-from enum import IntFlag
+from enum import IntFlag, StrEnum
 from ..cloud import site_details as sd
 
 from typing import TYPE_CHECKING
@@ -16,6 +16,16 @@ class PlejdTraits(IntFlag):
 
     COVER = 0x10
     TILT = 0x40
+
+
+class PlejdDeviceType(StrEnum):
+    LIGHT = "LIGHT"
+    SWITCH = "RELAY"
+    BUTTON = "SENSOR"
+    MOTION = "MOTION"
+    COVER = "COVERABLE"
+    SCENE = "SCENE"
+    UNKNOWN = "UNKNOWN"
 
 
 class PlejdDevice:
@@ -43,7 +53,7 @@ class PlejdDevice:
 
         self._listeners = set()
 
-        self.outputType = "UNKNOWN"
+        self.outputType = PlejdDeviceType.UNKNOWN
         self.identifier = None
         self.device_identifier = (plejdDevice.deviceId, device.objectId)
         self.capabilities = PlejdTraits(self.deviceData.traits)
@@ -109,7 +119,6 @@ class PlejdOutput(PlejdDevice):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.outputType = self.deviceData.outputType
         self.settings: sd.PlejdDeviceOutputSetting
         self.identifier = (self.plejdDevice.deviceId, "O", str(self.settings.output))
 

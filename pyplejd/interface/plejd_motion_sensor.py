@@ -1,11 +1,11 @@
 import asyncio
-from .plejd_device import PlejdInput
+from .plejd_device import PlejdInput, PlejdDeviceType
 
 
 class PlejdMotionSensor(PlejdInput):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.outputType = "MOTION"
+        self.outputType = PlejdDeviceType.MOTION
 
         self.cooldown = None
         # Motion sensors seem to timeout at 25-35 seconds

@@ -223,7 +223,7 @@ class SiteDetails(BaseModel):
     # astroEvents: list
     inputSettings: list[PlejdDeviceInputSetting]
     outputSettings: list[PlejdDeviceOutputSetting]
-    motionSensors: list[MotionSensor]
+    motionSensors: list[MotionSensor] | None = None
     rxAddress: dict[str, dict[str, int]] | None
     # stateTimers: dict
     # sitePermission: SitePermission
@@ -253,6 +253,8 @@ class SiteDetails(BaseModel):
                 return d
 
     def find_motionSensorData(self, deviceId: str | None, input: int) -> MotionSensor:
+        if not self.motionSensors:
+            return None
         for d in self.motionSensors:
             if d.deviceId == deviceId and d.input == input:
                 return d

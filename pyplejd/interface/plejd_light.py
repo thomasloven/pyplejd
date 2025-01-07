@@ -1,4 +1,4 @@
-from .plejd_device import PlejdOutput, PlejdTraits
+from .plejd_device import PlejdOutput, PlejdTraits, PlejdDeviceType
 
 
 class PlejdLight(PlejdOutput):
@@ -6,7 +6,7 @@ class PlejdLight(PlejdOutput):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.outputType = "LIGHT"
+        self.outputType = PlejdDeviceType.LIGHT
         self.dimmable = PlejdTraits.DIM in self.capabilities
 
         self.colortemp = None

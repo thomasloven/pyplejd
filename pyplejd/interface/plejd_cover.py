@@ -1,4 +1,4 @@
-from .plejd_device import PlejdOutput
+from .plejd_device import PlejdOutput, PlejdDeviceType
 
 
 class PlejdCover(PlejdOutput):
@@ -8,7 +8,7 @@ class PlejdCover(PlejdOutput):
         # settings.coverableSettings.coverableTiltStart
         # settings.coverableSettings.coverableTiltEnd
         self.previous_position = None
-        self.outputType = "COVERABLE"
+        self.outputType = PlejdDeviceType.COVER
 
     def parse_state(self, update, state):
         available = state.get("available", False)

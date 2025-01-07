@@ -25,10 +25,9 @@ def outputDeviceClass(device: PlejdEntityData) -> Type[dt.PlejdDevice]:
     if dt.PlejdTraits.COVER in traits:
         return dt.PlejdCover
     if dt.PlejdTraits.POWER in traits:
-        if notes := device["plejdDevice"].firmware.notes:
-            if "CTR" in notes:
-                return dt.PlejdRelay
-        return dt.PlejdLight
+        if dt.PlejdTraits.DIM in traits:
+            return dt.PlejdLight
+        return dt.PlejdRelay
 
     return dt.PlejdDevice
 

@@ -1,11 +1,11 @@
-from .plejd_device import PlejdInput
+from .plejd_device import PlejdInput, PlejdDeviceType
 
 
 class PlejdButton(PlejdInput):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.outputType = "SENSOR"
+        self.outputType = PlejdDeviceType.BUTTON
 
     @property
     def button_id(self):

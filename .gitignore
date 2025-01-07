@@ -7,3 +7,4 @@
 !setup.cfg
 !pyplejd/
 **/__pycache__/
+!compiling.md
