@@ -6,7 +6,7 @@ except ImportError:
 
 class Site(BaseModel):
     siteId: str
-    title: str
+    title: str | None = ""
 
 
 class SiteListItem(BaseModel):
