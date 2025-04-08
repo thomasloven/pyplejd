@@ -38,10 +38,12 @@ class PlejdDevice:
         settings: sd.PlejdDeviceOutputSetting | sd.PlejdDeviceInputSetting,
         room: sd.Room,
         mesh: PlejdMesh,
+        rxAddress: int,
         *_,
         **__,
     ):
         self.address = address
+        self.rxAddress = rxAddress
         self.deviceAddress = deviceAddress
         self.plejdDevice = plejdDevice
         self.settings = settings
@@ -62,7 +64,7 @@ class PlejdDevice:
         return f"<{self.__class__.__name__} {self.BLEaddress} ({self.address}) {self.name} [{self.hardware}] {self.outputType}-{self.capabilities!r}>"
 
     def match_state(self, state):
-        if state.get("address") == self.address:
+        if state.get("address") in [self.address, self.rxAddress]:
             return True
         return False
 

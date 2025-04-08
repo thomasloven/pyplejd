@@ -29,6 +29,8 @@ class PlejdScene:
 
         self.outputType = PlejdDeviceType.SCENE
         self.identifier = self.scene.sceneId
+        self.address = 0
+        self.rxAddress = -1
 
     def __repr__(self):
         return f"<{self.__class__.__name__} ({self.index}) {self.name}>"
