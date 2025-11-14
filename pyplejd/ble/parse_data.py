@@ -214,6 +214,51 @@ def parse_data(data: bytearray, device_types: dict | None = None):
                 "msg_type": msg_type,
             }
 
+        # Maximum temperature limit messages (register 0x0460)
+        case [addr, op1, op2, 0x04, 0x60, sub_id, first_low, first_high, second_low, second_high, *extra] if (device_types or {}).get(addr, "CLIMATE") == "CLIMATE":
+            # Limit configuration responses (register 0x0460) carry multiple values depending on sub_id
+            first_value = int.from_bytes([first_low, first_high], byteorder="little") / 10.0
+            second_value = int.from_bytes([second_low, second_high], byteorder="little") / 10.0
+            msg_type = "max_temp_push" if (op1, op2) == (0x01, 0x01) else ("max_temp_read" if (op1, op2) == (0x01, 0x03) else "max_temp_unknown")
+
+            result = {
+                "address": addr,
+                "msg_type": msg_type,
+                "limit_sub_id": sub_id,
+            }
+
+            if sub_id == 0x00:
+                result["floor_min_temperature"] = first_value
+                result["floor_max_temperature"] = second_value
+                rec_log(
+                    f"THERMOSTAT LIMITS (sub=0x00 floor) floor_min={first_value}°C floor_max={second_value}°C",
+                    addr,
+                )
+            elif sub_id == 0x01:
+                result["floor_min_temperature"] = first_value
+                result["room_max_temperature"] = second_value
+                rec_log(
+                    f"THERMOSTAT LIMITS (sub=0x01 room) floor_min={first_value}°C room_max={second_value}°C",
+                    addr,
+                )
+            elif sub_id == 0x02:
+                result["floor_min_temperature"] = first_value
+                result["room_max_temperature"] = second_value
+                rec_log(
+                    f"THERMOSTAT LIMITS (sub=0x02 room alt) floor_min={first_value}°C room_max={second_value}°C",
+                    addr,
+                )
+            else:
+                result["floor_min_temperature"] = first_value
+                result["limit_extra_value"] = second_value
+                rec_log(
+                    f"THERMOSTAT LIMITS (sub=0x{sub_id:02x}) first={first_value} second={second_value}",
+                    addr,
+                )
+
+            rec_log(f"    {data_hex}", addr)
+            return result
+
         case [addr, 0x01, 0x10, 0x00, 0xC8, state, dim1, dim2, *extra]:
             # State dim command
             extra_hex = "".join(f"{e:02x}" for e in extra)

@@ -14,6 +14,11 @@ class PlejdClimate(PlejdOutput):
         self.outputType = PlejdDeviceType.CLIMATE
         self._setpoint_read_in_progress = False
         self._last_setpoint_refresh = 0.0
+        self._setpoint_read_task = None
+        self._max_temp_read_task = None
+        self._floor_min_temp = None
+        self._floor_max_temp = None
+        self._room_max_temp = None
 
     def match_state(self, state):
         """
@@ -21,7 +26,17 @@ class PlejdClimate(PlejdOutput):
         Similar to how PlejdInput filters for 'button' messages, we filter for climate data.
         """
         # Climate devices respond to messages with these thermostat-specific fields
-        if 'mode' in state or 'temperature' in state or 'setpoint' in state or 'heating' in state:
+        climate_keys = {
+            'mode',
+            'temperature',
+            'setpoint',
+            'heating',
+            'floor_min_temperature',
+            'floor_max_temperature',
+            'room_max_temperature',
+            'max_temperature',
+        }
+        if any(key in state for key in climate_keys):
             return super().match_state(state)
         
         # Ignore everything else (including LIGHTLEVEL dim/state messages)
@@ -49,8 +64,10 @@ class PlejdClimate(PlejdOutput):
                 await self._mesh.read_setpoint(self.address)
             finally:
                 self._setpoint_read_in_progress = False
+                self._setpoint_read_task = None
 
-        asyncio.create_task(do_read())
+        task = asyncio.create_task(do_read())
+        self._setpoint_read_task = task
 
     def update_state(self, **state):
         import logging
@@ -131,8 +148,23 @@ class PlejdClimate(PlejdOutput):
             _LOGGER.debug(f"PlejdClimate: Processing status message, current={state['current_temperature']}")
             trigger_reason = trigger_reason or "temperature_update"
 
+        if "max_temperature" in state:
+            max_temp_value = state["max_temperature"]
+            _LOGGER.debug(f"PlejdClimate: Received max_temperature={max_temp_value}°C (msg_type={state.get('msg_type')})")
+
+        if "floor_min_temperature" in state:
+            self._floor_min_temp = state["floor_min_temperature"]
+            state["floor_min_temp"] = self._floor_min_temp
+        if "floor_max_temperature" in state:
+            self._floor_max_temp = state["floor_max_temperature"]
+            state["floor_max_temp"] = self._floor_max_temp
+        if "room_max_temperature" in state:
+            self._room_max_temp = state["room_max_temperature"]
+            state["room_max_temp"] = self._room_max_temp
+
         if state.get("available"):
             trigger_reason = trigger_reason or "device_available"
+        self._maybe_schedule_limit_read()
         
         _LOGGER.debug(f"PlejdClimate.update_state() calling parent with: {state}")
         
@@ -141,6 +173,12 @@ class PlejdClimate(PlejdOutput):
 
         if trigger_reason:
             self._maybe_schedule_setpoint_read(trigger_reason)
+        else:
+            # Ensure we still fetch max temperature even if no trigger reason set yet
+            if not self._state.get("max_temperature"):
+                self._maybe_schedule_limit_read()
+            elif not self._has_all_limits():
+                self._maybe_schedule_limit_read()
 
     def parse_state(self, update, state):
         available = state.get("available", False)
@@ -160,6 +198,16 @@ class PlejdClimate(PlejdOutput):
         # Get setpoint temperature
         if "setpoint" in state:
             parsed["setpoint"] = state["setpoint"]
+
+        if "max_temperature" in state:
+            parsed["max_temp"] = state["max_temperature"]
+
+        if self._floor_min_temp is not None:
+            parsed["floor_min_temp"] = self._floor_min_temp
+        if self._floor_max_temp is not None:
+            parsed["floor_max_temp"] = self._floor_max_temp
+        if self._room_max_temp is not None:
+            parsed["room_max_temp"] = self._room_max_temp
         
         return parsed
 
@@ -207,4 +255,33 @@ class PlejdClimate(PlejdOutput):
         if not self._mesh:
             return
         await self.set_mode("heat")
+
+    def _maybe_schedule_limit_read(self):
+        import asyncio
+        import logging
+
+        if self._max_temp_read_task or not self._mesh:
+            return
+
+        if self._has_all_limits():
+            return
+
+        _LOGGER = logging.getLogger(__name__)
+        async def do_read():
+            try:
+                await asyncio.sleep(0.5)
+                _LOGGER.debug("PlejdClimate: Requesting thermostat limits read")
+                await self._mesh.read_thermostat_limits(self.address)
+            finally:
+                self._max_temp_read_task = None
+
+        self._max_temp_read_task = asyncio.create_task(do_read())
+
+    def _has_all_limits(self):
+        return (
+            self._state.get("max_temperature") is not None
+            and self._floor_min_temp is not None
+            and self._floor_max_temp is not None
+            and self._room_max_temp is not None
+        )
 

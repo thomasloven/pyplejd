@@ -85,7 +85,7 @@ class PlejdMesh:
             return False
         try:
             await self._client.stop_notify(gatt.PLEJD_LASTDATA)
-            await self._client.stop_notify(gatt.PLEJD_POLL)
+            await self._client.stop_notify(gatt.PLEJD_LIGHTLEVEL)
             await self._client.disconnect()
         except BleakError:
             pass
@@ -292,6 +292,29 @@ class PlejdMesh:
                     
         except Exception as e:
             _LOGGER.warning(f"Failed to request setpoint read for device {address}: {e}")
+            return None
+
+    async def read_thermostat_limits(self, address: int):
+        """Request thermostat limit information via 0x0460 register."""
+        client = self._client
+        if client is None:
+            _LOGGER.warning("Cannot read thermostat limits: not connected")
+            return None
+
+        try:
+            async with self._ble_lock:
+                for sub_id in (0x00, 0x01, 0x02):
+                    read_cmd = f"{address:02x} 0102 0460 {sub_id:02x}"
+                    payloads = payload_encode.encode(self, [read_cmd])
+                    for payload in payloads:
+                        await client.write_gatt_char(gatt.PLEJD_DATA, payload, response=True)
+
+                _LOGGER.debug(f"Requested thermostat limits for device {address} (sub_ids 00/01/02)")
+                await asyncio.sleep(0.2)
+                return None
+
+        except Exception as e:
+            _LOGGER.warning(f"Failed to request thermostat limits for device {address}: {e}")
             return None
 
     async def _authenticate(self, client: BleakClient):
