@@ -1,9 +1,13 @@
 from .debug import rec_log
 
+THERMOSTAT_TEMP_MASK = 0x3F  # Lower six bits carry temperature information in status2
 
-def parse_data(data: bytearray):
+
+def parse_data(data: bytearray, device_types: dict | None = None):
     data_bytes = [data[i] for i in range(0, len(data))]
     data_hex = "".join(f"{b:02x}" for b in data_bytes)
+
+    rec_log(f"FULL DATA {data_hex}")
 
     match data_bytes:
         case [0x01, 0x01, 0x10, *extra]:
@@ -44,17 +48,173 @@ def parse_data(data: bytearray):
                 "action": "release" if len(extra) and not extra[0] else "press",
             }
 
-        case [addr, 0x01, 0x10, 0x00, 0xC8, state, dim1, dim2, *extra] | [
-            addr,
-            0x01,
-            0x10,
-            0x00,
-            0x98,
-            state,
-            dim1,
-            dim2,
-            *extra,
-        ]:
+        case [addr, 0x01, 0x01, 0x04, 0x7e, mode_value, *extra]:
+            # Thermostat mode readback (heating/off)
+            hvac_mode = "heating" if mode_value else "off"
+            rec_log(
+                f"THERMOSTAT MODE READBACK mode_value=0x{mode_value:02x} mode={hvac_mode}",
+                addr,
+            )
+            rec_log(f"    {data_hex}", addr)
+            return {
+                "address": addr,
+                "mode": hvac_mode,
+                "mode_value": mode_value,
+            }
+
+        case [addr, 0x01, 0x01, 0x04, 0x5F, mode_value, *extra]:
+            # Thermostat OFF command readback (register 0x5f)
+            mode = "off"
+            rec_log(
+                f"THERMOSTAT MODE READBACK (OFF) mode_value={mode_value:#02x} mode={mode}",
+                addr,
+            )
+            rec_log(f"    {data_hex}", addr)
+            return {
+                "address": addr,
+                "mode": mode,
+            }
+
+        case [addr, 0x01, 0x10, 0x04, 0x5F, mode_value, *extra]:
+            # Thermostat OFF command (register 0x5f)
+            mode = "off"
+            rec_log(
+                f"THERMOSTAT MODE COMMAND (OFF) mode_value={mode_value:#02x} mode={mode}",
+                addr,
+            )
+            rec_log(f"    {data_hex}", addr)
+            return {
+                "address": addr,
+                "mode": mode,
+            }
+
+        case [addr, 0x01, 0x10, 0x04, 0x7E, mode_value, *extra]:
+            # Thermostat ON command (register 0x7e)
+            mode = "heating"
+            rec_log(
+                f"THERMOSTAT MODE COMMAND (ON) mode_value={mode_value:#02x} mode={mode}",
+                addr,
+            )
+            rec_log(f"    {data_hex}", addr)
+            return {
+                "address": addr,
+                "mode": mode,
+            }
+
+        case [addr, 0x01, 0x10, 0x00, 0x98, state, status1, status2, *extra]:
+            # 0x98 is used by multiple device types
+            device_type = (device_types or {}).get(addr, "UNKNOWN")
+            if device_type == "CLIMATE":
+                # Thermostat status response
+                # Format: AA 01 10 00 98 [state] [status1] [status2] [heating]
+                extra_hex = "".join(f"{e:02x}" for e in extra)
+                heating = extra[0] == 0x80 if extra else None
+
+                # Temperature decoding via modulo-64 rule: lower six bits minus 10 degrees offset
+                temp_raw = status2 & THERMOSTAT_TEMP_MASK
+                current_temperature = temp_raw - 10
+                # Mode: off takes precedence when state==0; otherwise derive from heating flag
+                hvac_mode = "off" if not state else ("heating" if heating else "idle")
+
+                temp_str = f"{current_temperature}°C" if current_temperature is not None else "None (invalid)"
+                rec_log(
+                    f"THERMOSTAT STATUS state={state} status1={status1} status2={status2} current={temp_str} mode={hvac_mode} heating={heating}",
+                    addr,
+                )
+                rec_log(f"    {data_hex}", addr)
+                result = {
+                    "address": addr,
+                    "state": state,
+                    "status1": status1,
+                    "status2": status2,
+                    "heating": heating,
+                    "mode": hvac_mode,
+                }
+                if current_temperature is not None:
+                    result["temperature"] = current_temperature
+                rec_log(f"THERMOSTAT STATUS RETURNING: {result}", addr)
+                return result
+            else:
+                # Non-climate: treat as dim/cover style response
+                extra_hex = "".join(f"{e:02x}" for e in extra)
+                dim = status2
+                cover_position = int.from_bytes([status1, status2], byteorder="little", signed=True)
+                rec_log(f"DIM/STATE state={state} dim={dim} cover_position={cover_position} extra={extra_hex}", addr)
+                rec_log(f"    {data_hex}", addr)
+                return {
+                    "address": addr,
+                    "state": state,
+                    "dim": dim,
+                    "cover_position": cover_position,
+                }
+
+        case [addr, 0x01, 0x00, 0x04, 0x5c, temp_low, temp_high, *extra]:
+            # Current temperature from sensor - this is RELIABLE!
+            # Format: AA 01 00 04 5c [temp_low] [temp_high]
+            # Temperature encoded as 16-bit little-endian integer (value * 10)
+            temperature = int.from_bytes([temp_low, temp_high], byteorder="little") / 10.0
+            rec_log(
+                f"THERMOSTAT CURRENT TEMP temperature={temperature}°C msg_type=0",
+                addr,
+            )
+            rec_log(f"    {data_hex}", addr)
+            return {
+                "address": addr,
+                "temperature": temperature,
+                "msg_type": 0,
+            }
+
+        # Setpoint readback responses (01 02 pattern - device responds with 01 03!)
+        case [addr, 0x01, 0x03, 0x04, 0x5c, temp_low, temp_high, *extra] if (device_types or {}).get(addr, "CLIMATE") == "CLIMATE":
+            # Setpoint readback response - device returns setpoint via read request
+            # Format: AA 01 03 04 5c [temp_low] [temp_high]
+            # Pattern: We send 01 02 (read request), device responds with 01 03 (read response)
+            # Setpoint encoded as 16-bit little-endian integer (value * 10)
+            setpoint = int.from_bytes([temp_low, temp_high], byteorder="little") / 10.0
+            rec_log(
+                f"THERMOSTAT SETPOINT READBACK (01 02->01 03 pattern) setpoint={setpoint}°C (source=read_01_02)",
+                addr,
+            )
+            rec_log(f"    {data_hex}", addr)
+            return {
+                "address": addr,
+                "setpoint": setpoint,
+                "msg_type": "read_01_02",
+            }
+        
+        # Also handle 01 02 pattern in case device uses it directly (though we saw 01 03)
+        case [addr, 0x01, 0x02, 0x04, 0x5c, temp_low, temp_high, *extra] if (device_types or {}).get(addr, "CLIMATE") == "CLIMATE":
+            # Setpoint readback response (alternative format)
+            # Format: AA 01 02 04 5c [temp_low] [temp_high]
+            setpoint = int.from_bytes([temp_low, temp_high], byteorder="little") / 10.0
+            rec_log(
+                f"THERMOSTAT SETPOINT READBACK (01 02 pattern) setpoint={setpoint}°C (source=read_01_02)",
+                addr,
+            )
+            rec_log(f"    {data_hex}", addr)
+            return {
+                "address": addr,
+                "setpoint": setpoint,
+                "msg_type": "read_01_02",
+            }
+
+        # Legacy / unsolicited setpoint messages (0x01 0x10 0x04 0x5c)
+        case [addr, 0x01, 0x10, 0x04, 0x5c, temp_low, temp_high, *extra] if (device_types or {}).get(addr, "CLIMATE") == "CLIMATE":
+            # Device pushed a setpoint update (can be write ack or manual knob change)
+            setpoint = int.from_bytes([temp_low, temp_high], byteorder="little") / 10.0
+            msg_type = "write_ack" if extra else "push_5c"
+            rec_log(
+                f"THERMOSTAT SETPOINT PUSH setpoint={setpoint}°C (source={msg_type})",
+                addr,
+            )
+            rec_log(f"    {data_hex}", addr)
+            return {
+                "address": addr,
+                "setpoint": setpoint,
+                "msg_type": msg_type,
+            }
+
+        case [addr, 0x01, 0x10, 0x00, 0xC8, state, dim1, dim2, *extra]:
             # State dim command
             extra_hex = "".join(f"{e:02x}" for e in extra)
             rec_log(f"DIM {state=} {dim1=} {dim2=} {extra=} {extra_hex}", addr)
@@ -102,15 +262,14 @@ def parse_data(data: bytearray):
                 "temperature": color_temp,
             }
 
-        case [addr, 0x01, 0x10, 0x04, 0x20, a, 0x03, b, *extra, ll1, ll2]:
-            # Motion
-            lightlevel = int.from_bytes([ll1, ll2], "big")
-            rec_log(f"MOTION {a}-3-{b} {extra=} {lightlevel=}", addr)
+        case [addr, state, dim1, dim2, *extra]:
+            dim = dim1 + dim2 * 256
+            rec_log(f"LIGHTLEVEL state={bool(state)} dim={dim}", addr)
             rec_log(f"    {data_hex}", addr)
             return {
                 "address": addr,
-                "motion": True,
-                "luminance": lightlevel,
+                "state": bool(state),
+                "dim": dim,
             }
 
         case [addr, 0x01, 0x10, 0x04, 0x20, a, 0x05, *extra]:
@@ -128,8 +287,13 @@ def parse_data(data: bytearray):
             # Unknown command
             cmd = (f"{cmd1:x}", f"{cmd2:x}")
             extra = [f"{e:02x}" for e in extra]
-            rec_log(f"UNKNONW OLD COMMAND {addr=} {cmd=} {extra=}", addr)
-            rec_log(f"    {data_hex}", addr)
+            extra_hex = "".join(extra) if extra else ""
+            rec_log(f"UNKNONW OLD COMMAND addr={addr} cmd={cmd} extra={extra_hex}", addr)
+            # New: Detailed logging
+            if extra:
+                potential_temp = int(extra[0], 16) - 169  # Test hypothesis, convert hex to int
+                rec_log(f"Potential temp from extra[0]: {potential_temp}", addr)
+            return None
 
         case _:
             # Unknown command

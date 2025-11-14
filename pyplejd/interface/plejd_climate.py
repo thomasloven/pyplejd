@@ -1,0 +1,210 @@
+import time
+
+from .plejd_device import PlejdOutput, PlejdDeviceType
+
+
+SETPOINT_REFRESH_INTERVAL = 1  # Minimum seconds between automatic setpoint read requests
+STALE_SETPOINT_THRESHOLD = 2.0  # Degrees Celsius difference to treat readback as stale
+
+
+class PlejdClimate(PlejdOutput):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.outputType = PlejdDeviceType.CLIMATE
+        self._setpoint_read_in_progress = False
+        self._last_setpoint_refresh = 0.0
+
+    def match_state(self, state):
+        """
+        Climate devices only respond to thermostat-specific messages.
+        Similar to how PlejdInput filters for 'button' messages, we filter for climate data.
+        """
+        # Climate devices respond to messages with these thermostat-specific fields
+        if 'mode' in state or 'temperature' in state or 'setpoint' in state or 'heating' in state:
+            return super().match_state(state)
+        
+        # Ignore everything else (including LIGHTLEVEL dim/state messages)
+        return False
+
+    def _maybe_schedule_setpoint_read(self, reason: str, *, force: bool = False):
+        import asyncio
+        import logging
+
+        now = time.monotonic()
+
+        if (not force) and ((now - self._last_setpoint_refresh) < SETPOINT_REFRESH_INTERVAL):
+            return
+
+        if self._setpoint_read_in_progress or not self._mesh:
+            return
+
+        _LOGGER = logging.getLogger(__name__)
+        self._setpoint_read_in_progress = True
+
+        async def do_read():
+            try:
+                await asyncio.sleep(1.0)
+                _LOGGER.debug(f"PlejdClimate: Requesting setpoint read ({reason})")
+                await self._mesh.read_setpoint(self.address)
+            finally:
+                self._setpoint_read_in_progress = False
+
+        asyncio.create_task(do_read())
+
+    def update_state(self, **state):
+        import logging
+        import asyncio
+        _LOGGER = logging.getLogger(__name__)
+        
+        _LOGGER.debug(f"PlejdClimate.update_state() received: {state}")
+        
+        state = dict(state)
+        trigger_reason = None
+        # Override to handle temperature messages
+        # Dedicated temp messages (0x5c) have msg_type: 0 = current, 1 = setpoint readback (ignored)
+        # Status messages (0x98) have temperature (current) field when valid
+        # Setpoint comes from our SEND commands, not from device readback
+        
+        # Handle setpoint from 0x5c messages (testing new 01 02 pattern)
+        if "setpoint" in state:
+            msg_type = state.get("msg_type")
+            setpoint_value = state["setpoint"]
+            source = "unknown"
+            should_process_setpoint = True
+            
+            if msg_type == "write_ack":
+                source = "write_ack"
+            elif msg_type == "read":
+                source = "explicit_read"
+            elif msg_type == "push_5c":
+                source = "push_5c"
+            elif msg_type == "read_01_02":
+                source = "read_01_02_pattern"
+                # Check if readback is close to cached value (within 2°C)
+                # This prevents old readback values from overwriting newly set values
+                cached_setpoint = self._state.get("setpoint")
+                if cached_setpoint is not None:
+                    diff = abs(setpoint_value - cached_setpoint)
+                    if diff > STALE_SETPOINT_THRESHOLD:
+                        _LOGGER.warning(
+                            f"PlejdClimate: Ignoring stale readback: {setpoint_value}°C "
+                            f"(cached: {cached_setpoint}°C, diff: {diff:.1f}°C)"
+                        )
+                        # Remove setpoint from state so it doesn't overwrite cached value
+                        state.pop("setpoint", None)
+                        state.pop("msg_type", None)
+                        should_process_setpoint = False
+                        # Continue processing other fields, just skip this setpoint
+                    else:
+                        _LOGGER.debug(f"PlejdClimate: SUCCESS! Got setpoint via 01 02 pattern: {setpoint_value}°C")
+                else:
+                    _LOGGER.debug(f"PlejdClimate: SUCCESS! Got setpoint via 01 02 pattern: {setpoint_value}°C")
+            
+            if should_process_setpoint:
+                _LOGGER.debug(f"PlejdClimate: Processing setpoint={setpoint_value}°C (source={source})")
+                # Setpoint is already in state, will be passed to parent
+                # This overrides any cached setpoint with device-confirmed value
+                self._last_setpoint_refresh = time.monotonic()
+        
+        # Handle dedicated temperature messages (0x5c pattern with msg_type)
+        if "temperature" in state and "msg_type" in state:
+            msg_type = state["msg_type"]
+            temp_value = state["temperature"]
+            _LOGGER.debug(f"PlejdClimate: Processing temp message, msg_type={msg_type}, value={temp_value}")
+
+            if msg_type == 0:
+                # Current temperature from sensor - this is reliable!
+                state["current_temperature"] = temp_value
+                trigger_reason = trigger_reason or "temperature_update"
+            elif msg_type == 1:
+                # Setpoint readback - IGNORE IT, we use the sent value instead
+                # The device's setpoint confirmation is unreliable
+                _LOGGER.debug(f"PlejdClimate: Ignoring unreliable setpoint readback={temp_value}")
+                return  # Don't process this message further
+        
+        # Handle status messages (0x98 pattern)
+        # Status messages contain "temperature" (current) field
+        # Note: setpoint comes from separate 0x5c messages, NOT from status messages
+        elif "temperature" in state:
+            state["current_temperature"] = state["temperature"]
+            _LOGGER.debug(f"PlejdClimate: Processing status message, current={state['current_temperature']}")
+            trigger_reason = trigger_reason or "temperature_update"
+
+        if state.get("available"):
+            trigger_reason = trigger_reason or "device_available"
+        
+        _LOGGER.debug(f"PlejdClimate.update_state() calling parent with: {state}")
+        
+        # Call parent to update state and notify listeners
+        super().update_state(**state)
+
+        if trigger_reason:
+            self._maybe_schedule_setpoint_read(trigger_reason)
+
+    def parse_state(self, update, state):
+        available = state.get("available", False)
+        
+        # Note: 'update' is the new update, 'state' is the accumulated state (already merged)
+        # Temperature and setpoint are now stored separately in state
+        
+        parsed = {
+            "available": available,
+            "mode": state.get("mode", "off"),  # Default to "off" if not set
+        }
+        
+        # Get current temperature - always use "current_temperature" key
+        if "current_temperature" in state:
+            parsed["current_temperature"] = state["current_temperature"]
+
+        # Get setpoint temperature
+        if "setpoint" in state:
+            parsed["setpoint"] = state["setpoint"]
+        
+        return parsed
+
+    async def set_temperature(self, setpoint: float):
+        """Set the target temperature (setpoint) for the thermostat."""
+        if not self._mesh:
+            return
+        
+        # Send the command and get back the actual value that was sent
+        # The returned value is what was encoded and sent to the device
+        sent_values = await self._mesh.set_state(self.address, setpoint=setpoint)
+        
+        # Update local state with the ACTUAL setpoint that was sent
+        # This is the source of truth, not the unreliable device readback
+        if sent_values and "setpoint" in sent_values:
+            self.update_state(setpoint=sent_values["setpoint"])
+        
+        self._maybe_schedule_setpoint_read("post_set_temperature", force=True)
+
+    async def set_mode(self, mode: str):
+        """Set thermostat HVAC mode ("off" or "heat")."""
+        if not self._mesh:
+            return
+
+        normalized = mode.lower()
+        if normalized in ("off", "standby"):
+            target = "off"
+            payload_mode = "off"
+        else:
+            target = "heating"
+            payload_mode = "heat"
+
+        current = self._state.get("mode")
+        if current == target:
+            return
+
+        await self._mesh.set_state(self.address, thermostat_mode=payload_mode)
+
+    async def turn_off(self):
+        if not self._mesh:
+            return
+        await self.set_mode("off")
+
+    async def turn_on(self):
+        if not self._mesh:
+            return
+        await self.set_mode("heat")
+

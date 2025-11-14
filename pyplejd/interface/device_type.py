@@ -14,6 +14,7 @@ from .plejd_light import PlejdLight
 from .plejd_motion_sensor import PlejdMotionSensor
 from .plejd_relay import PlejdRelay
 from .plejd_scene import PlejdScene
+from .plejd_climate import PlejdClimate
 
 __all__ = [
     "PlejdDeviceType",
@@ -27,5 +28,6 @@ __all__ = [
     "PlejdMotionSensor",
     "PlejdRelay",
     "PlejdScene",
+    "PlejdClimate",
     "PlejdTraits",
 ]

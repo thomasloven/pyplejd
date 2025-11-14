@@ -13,7 +13,7 @@ from .crypto import auth_response, encrypt_decrypt
 from . import ble_characteristics as gatt
 from . import payload_encode
 from .parse_data import parse_data
-from .parse_lightlevel import parse_lightlevel
+from .parse_poll import parse_poll
 from .ble_characteristics import PLEJD_SERVICE
 
 _LOGGER = logging.getLogger(__name__)
@@ -32,6 +32,7 @@ class PlejdMesh:
 
         self._connect_listeners = set()
         self._state_listeners = set()
+        self._device_types = {}
 
         self._ble_lock = asyncio.Lock()
 
@@ -54,6 +55,11 @@ class PlejdMesh:
 
     def set_key(self, key: str):
         self._crypto_key = key
+
+    def set_device_types(self, device_types: dict):
+        """Store device type mapping for proper poll response parsing."""
+        self._device_types = device_types
+        _LOGGER.debug(f"PlejdMesh received device types: {device_types}")
 
     def _subscribe(self, set_: set, listener: Callable):
         set_.add(listener)
@@ -79,7 +85,7 @@ class PlejdMesh:
             return False
         try:
             await self._client.stop_notify(gatt.PLEJD_LASTDATA)
-            await self._client.stop_notify(gatt.PLEJD_LIGHTLEVEL)
+            await self._client.stop_notify(gatt.PLEJD_POLL)
             await self._client.disconnect()
         except BleakError:
             pass
@@ -149,19 +155,19 @@ class PlejdMesh:
         async def _lastdata_listener(_, lastdata: bytearray):
 
             data = encrypt_decrypt(self._crypto_key, self._gateway_node, lastdata)
-            retval = parse_data(data)
-
-            self._publish(self._state_listeners, retval)
+            retval = parse_data(data, self._device_types)
+            if retval is not None:
+                self._publish(self._state_listeners, retval)
 
             if "button" in retval:
                 await self.poll_buttons()
 
-        async def _lightlevel_listener(_, lightlevel: bytearray):
-            for state in parse_lightlevel(lightlevel):
+        async def _poll_listener(_, poll_response: bytearray):
+            for state in parse_poll(poll_response, self._device_types):
                 self._publish(self._state_listeners, state)
 
         await client.start_notify(gatt.PLEJD_LASTDATA, _lastdata_listener)
-        await client.start_notify(gatt.PLEJD_LIGHTLEVEL, _lightlevel_listener)
+        await client.start_notify(gatt.PLEJD_POLL, _poll_listener)
         self._client = client
 
         self._publish(self._connect_listeners, {"connected": True})
@@ -173,7 +179,7 @@ class PlejdMesh:
         if client is None:
             return
         _LOGGER.debug("Polling mesh for current state")
-        await client.write_gatt_char(gatt.PLEJD_LIGHTLEVEL, b"\x01", response=True)
+        await client.write_gatt_char(gatt.PLEJD_POLL, b"\x01", response=True)
 
     async def poll_buttons(self):
         await self._write(payload_encode.request_button(self))
@@ -190,8 +196,10 @@ class PlejdMesh:
         return retval
 
     async def set_state(self, address: int, **state):
-        payloads = payload_encode.set_state(self, address, **state)
+        payloads, sent_values = payload_encode.set_state(self, address, **state)
         await self._write(payloads)
+        # Return the actual values that were sent (e.g., setpoint) so device can update local state
+        return sent_values
 
     async def activate_scene(self, index: int):
         payloads = payload_encode.trigger_scene(self, index)
@@ -249,6 +257,42 @@ class PlejdMesh:
         except (BleakError, asyncio.TimeoutError) as e:
             _LOGGER.warning("Plejd mesh keepalive signal failed: %s", str(e))
         return False
+
+    async def read_setpoint(self, address: int):
+        """Request setpoint read using 01 02 pattern (matching Homey's read request format).
+        
+        Following Homey's pattern:
+        - Homey reads current temp: XX 01 02 00 a3
+        - We try reading setpoint: XX 01 02 04 5c
+        
+        Returns the decoded setpoint temperature in °C, or None if read fails.
+        Response will come via notification.
+        """
+        client = self._client
+        if client is None:
+            _LOGGER.warning("Cannot read setpoint: not connected")
+            return None
+        
+        try:
+            async with self._ble_lock:
+                # Send read request command for setpoint register 0x5c
+                # Format: AA 01 02 04 5c (read request, matching Homey's 01 02 pattern)
+                read_cmd = f"{address:02x} 0102 045c"
+                payloads = payload_encode.encode(self, [read_cmd])
+                for payload in payloads:
+                    await client.write_gatt_char(gatt.PLEJD_DATA, payload, response=True)
+                
+                _LOGGER.debug(f"Requested setpoint read for device {address} using 01 02 pattern, waiting for notification...")
+                await asyncio.sleep(0.2)  # Give device time to respond
+                
+                # Response will come via notification (_lastdata_listener)
+                # We can't easily wait for it here without a callback mechanism
+                # The setpoint will be updated when the notification arrives
+                return None  # Response comes via notification, not direct return
+                    
+        except Exception as e:
+            _LOGGER.warning(f"Failed to request setpoint read for device {address}: {e}")
+            return None
 
     async def _authenticate(self, client: BleakClient):
         if client is None:

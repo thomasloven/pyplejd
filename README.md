@@ -91,7 +91,7 @@ If `XX` is included, `XX=01` indicates the button was pressed and `XX=00` indica
 Sending this command will cause ALL buttons to send the Button Pressed command when pressed.
 Otherwise only battery powered buttons (WPH-01) will do so.
 
-This is what the Plejd app uses to identify a button when programming it. As far as I can tell, this does not affect the normal operation of the buttons.
+This is what the Plejd app uses to identify a button when programming it. As far as I can tell, thi not affects does the normal operation of the buttons.
 
 ## Coverables
 
