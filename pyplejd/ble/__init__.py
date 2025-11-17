@@ -259,11 +259,7 @@ class PlejdMesh:
         return False
 
     async def read_setpoint(self, address: int):
-        """Request setpoint read using 01 02 pattern (matching Homey's read request format).
-        
-        Following Homey's pattern:
-        - Homey reads current temp: XX 01 02 00 a3
-        - We try reading setpoint: XX 01 02 04 5c
+        """Request setpoint read using 01 02 pattern.
         
         Returns the decoded setpoint temperature in °C, or None if read fails.
         Response will come via notification.
@@ -276,7 +272,7 @@ class PlejdMesh:
         try:
             async with self._ble_lock:
                 # Send read request command for setpoint register 0x5c
-                # Format: AA 01 02 04 5c (read request, matching Homey's 01 02 pattern)
+                # Format: AA 01 02 04 5c
                 read_cmd = f"{address:02x} 0102 045c"
                 payloads = payload_encode.encode(self, [read_cmd])
                 for payload in payloads:

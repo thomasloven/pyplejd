@@ -1,6 +1,10 @@
 import time
+import asyncio
+import logging
 
 from .plejd_device import PlejdOutput, PlejdDeviceType
+
+_LOGGER = logging.getLogger(__name__)
 
 
 SETPOINT_REFRESH_INTERVAL = 1  # Minimum seconds between automatic setpoint read requests
@@ -23,7 +27,6 @@ class PlejdClimate(PlejdOutput):
     def match_state(self, state):
         """
         Climate devices only respond to thermostat-specific messages.
-        Similar to how PlejdInput filters for 'button' messages, we filter for climate data.
         """
         # Climate devices respond to messages with these thermostat-specific fields
         climate_keys = {
@@ -43,9 +46,6 @@ class PlejdClimate(PlejdOutput):
         return False
 
     def _maybe_schedule_setpoint_read(self, reason: str, *, force: bool = False):
-        import asyncio
-        import logging
-
         now = time.monotonic()
 
         if (not force) and ((now - self._last_setpoint_refresh) < SETPOINT_REFRESH_INTERVAL):
@@ -54,7 +54,6 @@ class PlejdClimate(PlejdOutput):
         if self._setpoint_read_in_progress or not self._mesh:
             return
 
-        _LOGGER = logging.getLogger(__name__)
         self._setpoint_read_in_progress = True
 
         async def do_read():
@@ -70,20 +69,13 @@ class PlejdClimate(PlejdOutput):
         self._setpoint_read_task = task
 
     def update_state(self, **state):
-        import logging
-        import asyncio
-        _LOGGER = logging.getLogger(__name__)
         
         _LOGGER.debug(f"PlejdClimate.update_state() received: {state}")
         
         state = dict(state)
         trigger_reason = None
-        # Override to handle temperature messages
-        # Dedicated temp messages (0x5c) have msg_type: 0 = current, 1 = setpoint readback (ignored)
-        # Status messages (0x98) have temperature (current) field when valid
-        # Setpoint comes from our SEND commands, not from device readback
         
-        # Handle setpoint from 0x5c messages (testing new 01 02 pattern)
+        # Handle setpoint from 0x5c messages
         if "setpoint" in state:
             msg_type = state.get("msg_type")
             setpoint_value = state["setpoint"]
@@ -92,13 +84,11 @@ class PlejdClimate(PlejdOutput):
             
             if msg_type == "write_ack":
                 source = "write_ack"
-            elif msg_type == "read":
-                source = "explicit_read"
             elif msg_type == "push_5c":
                 source = "push_5c"
             elif msg_type == "read_01_02":
                 source = "read_01_02_pattern"
-                # Check if readback is close to cached value (within 2°C)
+                # Check if readback is close to cached value (within threshold)
                 # This prevents old readback values from overwriting newly set values
                 cached_setpoint = self._state.get("setpoint")
                 if cached_setpoint is not None:
@@ -114,9 +104,9 @@ class PlejdClimate(PlejdOutput):
                         should_process_setpoint = False
                         # Continue processing other fields, just skip this setpoint
                     else:
-                        _LOGGER.debug(f"PlejdClimate: SUCCESS! Got setpoint via 01 02 pattern: {setpoint_value}°C")
+                        _LOGGER.debug(f"PlejdClimate: Got setpoint via 01 02 pattern: {setpoint_value}°C")
                 else:
-                    _LOGGER.debug(f"PlejdClimate: SUCCESS! Got setpoint via 01 02 pattern: {setpoint_value}°C")
+                    _LOGGER.debug(f"PlejdClimate: Got setpoint via 01 02 pattern: {setpoint_value}°C")
             
             if should_process_setpoint:
                 _LOGGER.debug(f"PlejdClimate: Processing setpoint={setpoint_value}°C (source={source})")
@@ -124,26 +114,9 @@ class PlejdClimate(PlejdOutput):
                 # This overrides any cached setpoint with device-confirmed value
                 self._last_setpoint_refresh = time.monotonic()
         
-        # Handle dedicated temperature messages (0x5c pattern with msg_type)
-        if "temperature" in state and "msg_type" in state:
-            msg_type = state["msg_type"]
-            temp_value = state["temperature"]
-            _LOGGER.debug(f"PlejdClimate: Processing temp message, msg_type={msg_type}, value={temp_value}")
-
-            if msg_type == 0:
-                # Current temperature from sensor - this is reliable!
-                state["current_temperature"] = temp_value
-                trigger_reason = trigger_reason or "temperature_update"
-            elif msg_type == 1:
-                # Setpoint readback - IGNORE IT, we use the sent value instead
-                # The device's setpoint confirmation is unreliable
-                _LOGGER.debug(f"PlejdClimate: Ignoring unreliable setpoint readback={temp_value}")
-                return  # Don't process this message further
-        
         # Handle status messages (0x98 pattern)
-        # Status messages contain "temperature" (current) field
-        # Note: setpoint comes from separate 0x5c messages, NOT from status messages
-        elif "temperature" in state:
+        # Status messages contain "temperature" (current) field from status2 byte
+        if "temperature" in state:
             state["current_temperature"] = state["temperature"]
             _LOGGER.debug(f"PlejdClimate: Processing status message, current={state['current_temperature']}")
             trigger_reason = trigger_reason or "temperature_update"
@@ -257,16 +230,13 @@ class PlejdClimate(PlejdOutput):
         await self.set_mode("heat")
 
     def _maybe_schedule_limit_read(self):
-        import asyncio
-        import logging
 
         if self._max_temp_read_task or not self._mesh:
             return
 
         if self._has_all_limits():
             return
-
-        _LOGGER = logging.getLogger(__name__)
+            
         async def do_read():
             try:
                 await asyncio.sleep(0.5)
