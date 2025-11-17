@@ -10,6 +10,41 @@ _LOGGER = logging.getLogger(__name__)
 SETPOINT_REFRESH_INTERVAL = 1  # Minimum seconds between automatic setpoint read requests
 STALE_SETPOINT_THRESHOLD = 2.0  # Degrees Celsius difference to treat readback as stale
 
+# State keys
+STATE_KEY_SETPOINT = "setpoint"
+STATE_KEY_TEMPERATURE = "temperature"
+STATE_KEY_CURRENT_TEMPERATURE = "current_temperature"
+STATE_KEY_MODE = "mode"
+STATE_KEY_HEATING = "heating"
+STATE_KEY_FLOOR_MIN_TEMPERATURE = "floor_min_temperature"
+STATE_KEY_FLOOR_MAX_TEMPERATURE = "floor_max_temperature"
+STATE_KEY_ROOM_MAX_TEMPERATURE = "room_max_temperature"
+STATE_KEY_MAX_TEMPERATURE = "max_temperature"
+STATE_KEY_AVAILABLE = "available"
+STATE_KEY_MSG_TYPE = "msg_type"
+STATE_KEY_FLOOR_MIN_TEMP = "floor_min_temp"
+STATE_KEY_FLOOR_MAX_TEMP = "floor_max_temp"
+STATE_KEY_ROOM_MAX_TEMP = "room_max_temp"
+STATE_KEY_MAX_TEMP = "max_temp"
+
+# Message types
+MSG_TYPE_WRITE_ACK = "write_ack"
+MSG_TYPE_PUSH_5C = "push_5c"
+MSG_TYPE_READ_01_02 = "read_01_02"
+MSG_TYPE_READ_01_02_PATTERN = "read_01_02_pattern"
+MSG_TYPE_UNKNOWN = "unknown"
+
+# Mode values
+MODE_OFF = "off"
+MODE_STANDBY = "standby"
+MODE_HEATING = "heating"
+MODE_HEAT = "heat"
+
+# Trigger reasons
+TRIGGER_TEMPERATURE_UPDATE = "temperature_update"
+TRIGGER_DEVICE_AVAILABLE = "device_available"
+TRIGGER_POST_SET_TEMPERATURE = "post_set_temperature"
+
 
 class PlejdClimate(PlejdOutput):
 
@@ -30,14 +65,14 @@ class PlejdClimate(PlejdOutput):
         """
         # Climate devices respond to messages with these thermostat-specific fields
         climate_keys = {
-            'mode',
-            'temperature',
-            'setpoint',
-            'heating',
-            'floor_min_temperature',
-            'floor_max_temperature',
-            'room_max_temperature',
-            'max_temperature',
+            STATE_KEY_MODE,
+            STATE_KEY_TEMPERATURE,
+            STATE_KEY_SETPOINT,
+            STATE_KEY_HEATING,
+            STATE_KEY_FLOOR_MIN_TEMPERATURE,
+            STATE_KEY_FLOOR_MAX_TEMPERATURE,
+            STATE_KEY_ROOM_MAX_TEMPERATURE,
+            STATE_KEY_MAX_TEMPERATURE,
         }
         if any(key in state for key in climate_keys):
             return super().match_state(state)
@@ -76,21 +111,21 @@ class PlejdClimate(PlejdOutput):
         trigger_reason = None
         
         # Handle setpoint from 0x5c messages
-        if "setpoint" in state:
-            msg_type = state.get("msg_type")
-            setpoint_value = state["setpoint"]
-            source = "unknown"
+        if STATE_KEY_SETPOINT in state:
+            msg_type = state.get(STATE_KEY_MSG_TYPE)
+            setpoint_value = state[STATE_KEY_SETPOINT]
+            source = MSG_TYPE_UNKNOWN
             should_process_setpoint = True
             
-            if msg_type == "write_ack":
-                source = "write_ack"
-            elif msg_type == "push_5c":
-                source = "push_5c"
-            elif msg_type == "read_01_02":
-                source = "read_01_02_pattern"
+            if msg_type == MSG_TYPE_WRITE_ACK:
+                source = MSG_TYPE_WRITE_ACK
+            elif msg_type == MSG_TYPE_PUSH_5C:
+                source = MSG_TYPE_PUSH_5C
+            elif msg_type == MSG_TYPE_READ_01_02:
+                source = MSG_TYPE_READ_01_02_PATTERN
                 # Check if readback is close to cached value (within threshold)
                 # This prevents old readback values from overwriting newly set values
-                cached_setpoint = self._state.get("setpoint")
+                cached_setpoint = self._state.get(STATE_KEY_SETPOINT)
                 if cached_setpoint is not None:
                     diff = abs(setpoint_value - cached_setpoint)
                     if diff > STALE_SETPOINT_THRESHOLD:
@@ -99,8 +134,8 @@ class PlejdClimate(PlejdOutput):
                             f"(cached: {cached_setpoint}°C, diff: {diff:.1f}°C)"
                         )
                         # Remove setpoint from state so it doesn't overwrite cached value
-                        state.pop("setpoint", None)
-                        state.pop("msg_type", None)
+                        state.pop(STATE_KEY_SETPOINT, None)
+                        state.pop(STATE_KEY_MSG_TYPE, None)
                         should_process_setpoint = False
                         # Continue processing other fields, just skip this setpoint
                     else:
@@ -116,27 +151,27 @@ class PlejdClimate(PlejdOutput):
         
         # Handle status messages (0x98 pattern)
         # Status messages contain "temperature" (current) field from status2 byte
-        if "temperature" in state:
-            state["current_temperature"] = state["temperature"]
-            _LOGGER.debug(f"PlejdClimate: Processing status message, current={state['current_temperature']}")
-            trigger_reason = trigger_reason or "temperature_update"
+        if STATE_KEY_TEMPERATURE in state:
+            state[STATE_KEY_CURRENT_TEMPERATURE] = state[STATE_KEY_TEMPERATURE]
+            _LOGGER.debug(f"PlejdClimate: Processing status message, current={state[STATE_KEY_CURRENT_TEMPERATURE]}")
+            trigger_reason = trigger_reason or TRIGGER_TEMPERATURE_UPDATE
 
-        if "max_temperature" in state:
-            max_temp_value = state["max_temperature"]
-            _LOGGER.debug(f"PlejdClimate: Received max_temperature={max_temp_value}°C (msg_type={state.get('msg_type')})")
+        if STATE_KEY_MAX_TEMPERATURE in state:
+            max_temp_value = state[STATE_KEY_MAX_TEMPERATURE]
+            _LOGGER.debug(f"PlejdClimate: Received max_temperature={max_temp_value}°C (msg_type={state.get(STATE_KEY_MSG_TYPE)})")
 
-        if "floor_min_temperature" in state:
-            self._floor_min_temp = state["floor_min_temperature"]
-            state["floor_min_temp"] = self._floor_min_temp
-        if "floor_max_temperature" in state:
-            self._floor_max_temp = state["floor_max_temperature"]
-            state["floor_max_temp"] = self._floor_max_temp
-        if "room_max_temperature" in state:
-            self._room_max_temp = state["room_max_temperature"]
-            state["room_max_temp"] = self._room_max_temp
+        if STATE_KEY_FLOOR_MIN_TEMPERATURE in state:
+            self._floor_min_temp = state[STATE_KEY_FLOOR_MIN_TEMPERATURE]
+            state[STATE_KEY_FLOOR_MIN_TEMP] = self._floor_min_temp
+        if STATE_KEY_FLOOR_MAX_TEMPERATURE in state:
+            self._floor_max_temp = state[STATE_KEY_FLOOR_MAX_TEMPERATURE]
+            state[STATE_KEY_FLOOR_MAX_TEMP] = self._floor_max_temp
+        if STATE_KEY_ROOM_MAX_TEMPERATURE in state:
+            self._room_max_temp = state[STATE_KEY_ROOM_MAX_TEMPERATURE]
+            state[STATE_KEY_ROOM_MAX_TEMP] = self._room_max_temp
 
-        if state.get("available"):
-            trigger_reason = trigger_reason or "device_available"
+        if state.get(STATE_KEY_AVAILABLE):
+            trigger_reason = trigger_reason or TRIGGER_DEVICE_AVAILABLE
         self._maybe_schedule_limit_read()
         
         _LOGGER.debug(f"PlejdClimate.update_state() calling parent with: {state}")
@@ -148,39 +183,39 @@ class PlejdClimate(PlejdOutput):
             self._maybe_schedule_setpoint_read(trigger_reason)
         else:
             # Ensure we still fetch max temperature even if no trigger reason set yet
-            if not self._state.get("max_temperature"):
+            if not self._state.get(STATE_KEY_MAX_TEMPERATURE):
                 self._maybe_schedule_limit_read()
             elif not self._has_all_limits():
                 self._maybe_schedule_limit_read()
 
     def parse_state(self, update, state):
-        available = state.get("available", False)
+        available = state.get(STATE_KEY_AVAILABLE, False)
         
         # Note: 'update' is the new update, 'state' is the accumulated state (already merged)
         # Temperature and setpoint are now stored separately in state
         
         parsed = {
-            "available": available,
-            "mode": state.get("mode", "off"),  # Default to "off" if not set
+            STATE_KEY_AVAILABLE: available,
+            STATE_KEY_MODE: state.get(STATE_KEY_MODE, MODE_OFF),  # Default to "off" if not set
         }
         
         # Get current temperature - always use "current_temperature" key
-        if "current_temperature" in state:
-            parsed["current_temperature"] = state["current_temperature"]
+        if STATE_KEY_CURRENT_TEMPERATURE in state:
+            parsed[STATE_KEY_CURRENT_TEMPERATURE] = state[STATE_KEY_CURRENT_TEMPERATURE]
 
         # Get setpoint temperature
-        if "setpoint" in state:
-            parsed["setpoint"] = state["setpoint"]
+        if STATE_KEY_SETPOINT in state:
+            parsed[STATE_KEY_SETPOINT] = state[STATE_KEY_SETPOINT]
 
-        if "max_temperature" in state:
-            parsed["max_temp"] = state["max_temperature"]
+        if STATE_KEY_MAX_TEMPERATURE in state:
+            parsed[STATE_KEY_MAX_TEMP] = state[STATE_KEY_MAX_TEMPERATURE]
 
         if self._floor_min_temp is not None:
-            parsed["floor_min_temp"] = self._floor_min_temp
+            parsed[STATE_KEY_FLOOR_MIN_TEMP] = self._floor_min_temp
         if self._floor_max_temp is not None:
-            parsed["floor_max_temp"] = self._floor_max_temp
+            parsed[STATE_KEY_FLOOR_MAX_TEMP] = self._floor_max_temp
         if self._room_max_temp is not None:
-            parsed["room_max_temp"] = self._room_max_temp
+            parsed[STATE_KEY_ROOM_MAX_TEMP] = self._room_max_temp
         
         return parsed
 
@@ -195,10 +230,10 @@ class PlejdClimate(PlejdOutput):
         
         # Update local state with the ACTUAL setpoint that was sent
         # This is the source of truth, not the unreliable device readback
-        if sent_values and "setpoint" in sent_values:
-            self.update_state(setpoint=sent_values["setpoint"])
+        if sent_values and STATE_KEY_SETPOINT in sent_values:
+            self.update_state(setpoint=sent_values[STATE_KEY_SETPOINT])
         
-        self._maybe_schedule_setpoint_read("post_set_temperature", force=True)
+        self._maybe_schedule_setpoint_read(TRIGGER_POST_SET_TEMPERATURE, force=True)
 
     async def set_mode(self, mode: str):
         """Set thermostat HVAC mode ("off" or "heat")."""
@@ -206,14 +241,14 @@ class PlejdClimate(PlejdOutput):
             return
 
         normalized = mode.lower()
-        if normalized in ("off", "standby"):
-            target = "off"
-            payload_mode = "off"
+        if normalized in (MODE_OFF, MODE_STANDBY):
+            target = MODE_OFF
+            payload_mode = MODE_OFF
         else:
-            target = "heating"
-            payload_mode = "heat"
+            target = MODE_HEATING
+            payload_mode = MODE_HEAT
 
-        current = self._state.get("mode")
+        current = self._state.get(STATE_KEY_MODE)
         if current == target:
             return
 
@@ -222,12 +257,12 @@ class PlejdClimate(PlejdOutput):
     async def turn_off(self):
         if not self._mesh:
             return
-        await self.set_mode("off")
+        await self.set_mode(MODE_OFF)
 
     async def turn_on(self):
         if not self._mesh:
             return
-        await self.set_mode("heat")
+        await self.set_mode(MODE_HEAT)
 
     def _maybe_schedule_limit_read(self):
 
@@ -249,7 +284,7 @@ class PlejdClimate(PlejdOutput):
 
     def _has_all_limits(self):
         return (
-            self._state.get("max_temperature") is not None
+            self._state.get(STATE_KEY_MAX_TEMPERATURE) is not None
             and self._floor_min_temp is not None
             and self._floor_max_temp is not None
             and self._room_max_temp is not None
