@@ -4,7 +4,7 @@ from .debug import rec_log
 def parse_poll(data: bytearray, device_types: dict | None = None):
     """Parse poll responses from Plejd mesh.
     
-    This parses responses from the PLEJD_POLL characteristic (formerly LIGHTLEVEL).
+    This parses responses from the PLEJD_POLL characteristic 
     All device types respond to poll requests with a 10-byte status packet.
     
     Args:

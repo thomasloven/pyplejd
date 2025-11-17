@@ -48,59 +48,6 @@ def parse_data(data: bytearray, device_types: dict | None = None):
                 "action": "release" if len(extra) and not extra[0] else "press",
             }
 
-        case [addr, 0x01, 0x01, 0x04, 0x7e, mode_value, *extra]:
-            # Thermostat mode readback (heating/off)
-            hvac_mode = "heating" if mode_value else "off"
-            rec_log(
-                f"THERMOSTAT MODE READBACK mode_value=0x{mode_value:02x} mode={hvac_mode}",
-                addr,
-            )
-            rec_log(f"    {data_hex}", addr)
-            return {
-                "address": addr,
-                "mode": hvac_mode,
-                "mode_value": mode_value,
-            }
-
-        case [addr, 0x01, 0x01, 0x04, 0x5F, mode_value, *extra]:
-            # Thermostat OFF command readback (register 0x5f)
-            mode = "off"
-            rec_log(
-                f"THERMOSTAT MODE READBACK (OFF) mode_value={mode_value:#02x} mode={mode}",
-                addr,
-            )
-            rec_log(f"    {data_hex}", addr)
-            return {
-                "address": addr,
-                "mode": mode,
-            }
-
-        case [addr, 0x01, 0x10, 0x04, 0x5F, mode_value, *extra]:
-            # Thermostat OFF command (register 0x5f)
-            mode = "off"
-            rec_log(
-                f"THERMOSTAT MODE COMMAND (OFF) mode_value={mode_value:#02x} mode={mode}",
-                addr,
-            )
-            rec_log(f"    {data_hex}", addr)
-            return {
-                "address": addr,
-                "mode": mode,
-            }
-
-        case [addr, 0x01, 0x10, 0x04, 0x7E, mode_value, *extra]:
-            # Thermostat ON command (register 0x7e)
-            mode = "heating"
-            rec_log(
-                f"THERMOSTAT MODE COMMAND (ON) mode_value={mode_value:#02x} mode={mode}",
-                addr,
-            )
-            rec_log(f"    {data_hex}", addr)
-            return {
-                "address": addr,
-                "mode": mode,
-            }
-
         case [addr, 0x01, 0x10, 0x00, 0x98, state, status1, status2, *extra]:
             # 0x98 is used by multiple device types
             device_type = (device_types or {}).get(addr, "UNKNOWN")
@@ -147,22 +94,6 @@ def parse_data(data: bytearray, device_types: dict | None = None):
                     "dim": dim,
                     "cover_position": cover_position,
                 }
-
-        case [addr, 0x01, 0x00, 0x04, 0x5c, temp_low, temp_high, *extra]:
-            # Current temperature from sensor - this is RELIABLE!
-            # Format: AA 01 00 04 5c [temp_low] [temp_high]
-            # Temperature encoded as 16-bit little-endian integer (value * 10)
-            temperature = int.from_bytes([temp_low, temp_high], byteorder="little") / 10.0
-            rec_log(
-                f"THERMOSTAT CURRENT TEMP temperature={temperature}°C msg_type=0",
-                addr,
-            )
-            rec_log(f"    {data_hex}", addr)
-            return {
-                "address": addr,
-                "temperature": temperature,
-                "msg_type": 0,
-            }
 
         # Setpoint readback responses (01 02 pattern - device responds with 01 03!)
         case [addr, 0x01, 0x03, 0x04, 0x5c, temp_low, temp_high, *extra] if (device_types or {}).get(addr, "CLIMATE") == "CLIMATE":
@@ -334,10 +265,6 @@ def parse_data(data: bytearray, device_types: dict | None = None):
             extra = [f"{e:02x}" for e in extra]
             extra_hex = "".join(extra) if extra else ""
             rec_log(f"UNKNONW OLD COMMAND addr={addr} cmd={cmd} extra={extra_hex}", addr)
-            # New: Detailed logging
-            if extra:
-                potential_temp = int(extra[0], 16) - 169  # Test hypothesis, convert hex to int
-                rec_log(f"Potential temp from extra[0]: {potential_temp}", addr)
             return None
 
         case _:
