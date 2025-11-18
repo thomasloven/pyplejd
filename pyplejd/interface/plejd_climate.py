@@ -79,6 +79,11 @@ class PlejdClimate(PlejdOutput):
         return False
 
     def _maybe_schedule_setpoint_read(self, reason: str):
+        """Schedule a setpoint read task if not already in progress.
+        
+        Args:
+            reason: Reason for the read (e.g., "device_available") for logging purposes
+        """
         if not self._mesh:
             return
 
@@ -294,6 +299,11 @@ class PlejdClimate(PlejdOutput):
         await self.set_mode(MODE_HEAT)
 
     def _maybe_schedule_limit_read(self):
+        """Schedule a limit read task if not already in progress and limits are missing.
+        
+        Reads thermostat temperature limits (floor min/max, room max, max temperature)
+        from the device. Only schedules if limits are not already known.
+        """
         # Check if task is already running (not just if it exists)
         if self._max_temp_read_task and not self._max_temp_read_task.done():
             return
@@ -323,6 +333,12 @@ class PlejdClimate(PlejdOutput):
         self._max_temp_read_task = asyncio.create_task(do_read())
 
     def _has_all_limits(self):
+        """Check if all required thermostat temperature limits have been received.
+        
+        Returns:
+            bool: True if all limits (max_temperature, floor_min_temp, 
+                  floor_max_temp, room_max_temp) are known, False otherwise
+        """
         return (
             self._state.get(STATE_KEY_MAX_TEMPERATURE) is not None
             and self._floor_min_temp is not None

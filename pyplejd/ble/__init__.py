@@ -291,7 +291,21 @@ class PlejdMesh:
             return None
 
     async def read_thermostat_limits(self, address: int):
-        """Request thermostat limit information via 0x0460 register."""
+        """Request thermostat limit information via 0x0460 register.
+        
+        Reads temperature limit configuration from the device using register 0x0460
+        with different sub-IDs to retrieve:
+        - sub_id 0x00: floor_min_temperature and floor_max_temperature
+        - sub_id 0x01: floor_min_temperature and room_max_temperature
+        - sub_id 0x02: floor_min_temperature and room_max_temperature (alternative)
+        
+        Args:
+            address: Device address to read limits from
+            
+        Returns:
+            None - Responses come via notification (_lastdata_listener)
+            The limits will be updated when notifications arrive
+        """
         client = self._client
         if client is None:
             _LOGGER.warning("Cannot read thermostat limits: not connected")
