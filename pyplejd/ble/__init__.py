@@ -19,6 +19,9 @@ from .ble_characteristics import PLEJD_SERVICE
 _LOGGER = logging.getLogger(__name__)
 _CONNECTION_LOG = logging.getLogger("pyplejd.ble.connection")
 
+# BLE communication timing constants
+READ_RESPONSE_DELAY = 0.2  # Seconds to wait after read request for device response
+
 
 class PlejdMesh:
     def __init__(self, manager):
@@ -158,9 +161,8 @@ class PlejdMesh:
             retval = parse_data(data, self._device_types)
             if retval is not None:
                 self._publish(self._state_listeners, retval)
-
-            if "button" in retval:
-                await self.poll_buttons()
+                if "button" in retval:
+                    await self.poll_buttons()
 
         async def _poll_listener(_, poll_response: bytearray):
             for state in parse_poll(poll_response, self._device_types):
@@ -279,7 +281,7 @@ class PlejdMesh:
                     await client.write_gatt_char(gatt.PLEJD_DATA, payload, response=True)
                 
                 _LOGGER.debug(f"Requested setpoint read for device {address} using 01 02 pattern, waiting for notification...")
-                await asyncio.sleep(0.2)  # Give device time to respond
+                await asyncio.sleep(READ_RESPONSE_DELAY)  # Give device time to respond
                 
                 # Response will come via notification (_lastdata_listener)
                 # We can't easily wait for it here without a callback mechanism
@@ -320,7 +322,7 @@ class PlejdMesh:
                         await client.write_gatt_char(gatt.PLEJD_DATA, payload, response=True)
 
                 _LOGGER.debug(f"Requested thermostat limits for device {address} (sub_ids 00/01/02)")
-                await asyncio.sleep(0.2)
+                await asyncio.sleep(READ_RESPONSE_DELAY)
                 return None
 
         except Exception as e:

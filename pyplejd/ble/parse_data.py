@@ -4,6 +4,30 @@ THERMOSTAT_TEMP_MASK = 0x3F  # Lower six bits carry temperature information in s
 
 
 def parse_data(data: bytearray, device_types: dict | None = None):
+    """Parse incoming BLE data messages from Plejd mesh.
+    
+    Args:
+        data: Raw BLE data bytearray
+        device_types: Optional dict mapping address (int) to device type (PlejdDeviceType enum)
+    
+    Returns:
+        dict | None: Parsed device state dict if message was recognized, None otherwise
+    """
+    # Validate device_types format if provided
+    if device_types is not None:
+        if not isinstance(device_types, dict):
+            rec_log(f"WARNING: device_types must be a dict, got {type(device_types).__name__}")
+            device_types = None
+        else:
+            for addr, dev_type in device_types.items():
+                if not isinstance(addr, int):
+                    rec_log(f"WARNING: device_types key {addr} (type {type(addr).__name__}) is not an integer")
+                # Note: dev_type should be PlejdDeviceType enum, but we allow any value
+                # The comparison logic in the code handles unknown types gracefully
+    
+    if device_types is None:
+        device_types = {}
+    
     data_bytes = [data[i] for i in range(0, len(data))]
     data_hex = "".join(f"{b:02x}" for b in data_bytes)
 
@@ -272,4 +296,4 @@ def parse_data(data: bytearray, device_types: dict | None = None):
             rec_log(f"UNKNOWN {data=}")
             rec_log(f"    {data_hex}")
 
-    return {}
+    return None

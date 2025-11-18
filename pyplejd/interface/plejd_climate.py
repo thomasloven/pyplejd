@@ -8,6 +8,12 @@ _LOGGER = logging.getLogger(__name__)
 
 
 STALE_SETPOINT_THRESHOLD = 2.0  # Degrees Celsius difference to treat readback as stale
+STALE_SETPOINT_RECENT_WRITE_TIME = 3.0  # Seconds after write to use stricter threshold
+STALE_SETPOINT_RECENT_WRITE_DIFF = 0.5  # Stricter threshold (degrees C) for readbacks after recent write
+
+# Task scheduling delays (seconds)
+SETPOINT_READ_DELAY = 1.0  # Delay before requesting setpoint read
+LIMIT_READ_DELAY = 0.5  # Delay before requesting limit read
 
 # State keys
 STATE_KEY_SETPOINT = "setpoint"
@@ -75,7 +81,6 @@ class PlejdClimate(PlejdOutput):
         if any(key in state for key in climate_keys):
             return super().match_state(state)
         
-        # Ignore everything else (including LIGHTLEVEL dim/state messages)
         return False
 
     def _maybe_schedule_setpoint_read(self, reason: str):
@@ -98,7 +103,7 @@ class PlejdClimate(PlejdOutput):
 
         async def do_read():
             try:
-                await asyncio.sleep(1.0)
+                await asyncio.sleep(SETPOINT_READ_DELAY)
                 # Check if task was cancelled or device is no longer valid
                 if not self._mesh:
                     return
@@ -145,12 +150,12 @@ class PlejdClimate(PlejdOutput):
                 now = time.monotonic()
                 time_since_write = now - self._last_setpoint_write_time
                 
-                # If we recently wrote a setpoint (within 3 seconds), be more strict about rejecting readbacks
+                # If we recently wrote a setpoint (within STALE_SETPOINT_RECENT_WRITE_TIME), be more strict about rejecting readbacks
                 # This prevents readbacks from overwriting values we just set
                 if cached_setpoint is not None:
                     diff = abs(setpoint_value - cached_setpoint)
                     # Use >= instead of > to catch edge cases, and be stricter if we just wrote
-                    threshold = STALE_SETPOINT_THRESHOLD if time_since_write > 3.0 else 0.5
+                    threshold = STALE_SETPOINT_THRESHOLD if time_since_write > STALE_SETPOINT_RECENT_WRITE_TIME else STALE_SETPOINT_RECENT_WRITE_DIFF
                     
                     if diff >= threshold:
                         _LOGGER.warning(
@@ -316,7 +321,7 @@ class PlejdClimate(PlejdOutput):
             
         async def do_read():
             try:
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(LIMIT_READ_DELAY)
                 # Check if task was cancelled or device is no longer valid
                 if not self._mesh:
                     return
