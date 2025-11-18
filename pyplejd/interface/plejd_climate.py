@@ -7,7 +7,6 @@ from .plejd_device import PlejdOutput, PlejdDeviceType
 _LOGGER = logging.getLogger(__name__)
 
 
-SETPOINT_REFRESH_INTERVAL = 1  # Minimum seconds between automatic setpoint read requests
 STALE_SETPOINT_THRESHOLD = 2.0  # Degrees Celsius difference to treat readback as stale
 
 # State keys
@@ -41,9 +40,7 @@ MODE_HEATING = "heating"
 MODE_HEAT = "heat"
 
 # Trigger reasons
-TRIGGER_TEMPERATURE_UPDATE = "temperature_update"
 TRIGGER_DEVICE_AVAILABLE = "device_available"
-TRIGGER_POST_SET_TEMPERATURE = "post_set_temperature"
 
 
 class PlejdClimate(PlejdOutput):
@@ -52,12 +49,13 @@ class PlejdClimate(PlejdOutput):
         super().__init__(*args, **kwargs)
         self.outputType = PlejdDeviceType.CLIMATE
         self._setpoint_read_in_progress = False
-        self._last_setpoint_refresh = 0.0
         self._setpoint_read_task = None
         self._max_temp_read_task = None
         self._floor_min_temp = None
         self._floor_max_temp = None
         self._room_max_temp = None
+        self._was_available = False  # Track previous availability state to detect transitions
+        self._last_setpoint_write_time = 0.0  # Track when setpoint was last written to reject stale readbacks
 
     def match_state(self, state):
         """
@@ -80,27 +78,41 @@ class PlejdClimate(PlejdOutput):
         # Ignore everything else (including LIGHTLEVEL dim/state messages)
         return False
 
-    def _maybe_schedule_setpoint_read(self, reason: str, *, force: bool = False):
-        now = time.monotonic()
-
-        if (not force) and ((now - self._last_setpoint_refresh) < SETPOINT_REFRESH_INTERVAL):
+    def _maybe_schedule_setpoint_read(self, reason: str):
+        if not self._mesh:
             return
 
-        if self._setpoint_read_in_progress or not self._mesh:
+        # Check if task is already running (consistent with _maybe_schedule_limit_read)
+        if self._setpoint_read_task and not self._setpoint_read_task.done():
             return
 
         self._setpoint_read_in_progress = True
 
+        # Use a list to hold task reference that can be updated after closure creation
+        task_container = [None]
+
         async def do_read():
             try:
                 await asyncio.sleep(1.0)
+                # Check if task was cancelled or device is no longer valid
+                if not self._mesh:
+                    return
                 _LOGGER.debug(f"PlejdClimate: Requesting setpoint read ({reason})")
                 await self._mesh.read_setpoint(self.address)
+            except asyncio.CancelledError:
+                _LOGGER.debug(f"PlejdClimate: Setpoint read task cancelled ({reason})")
+                raise
+            except Exception as e:
+                _LOGGER.warning(f"PlejdClimate: Error in setpoint read task: {e}")
             finally:
-                self._setpoint_read_in_progress = False
-                self._setpoint_read_task = None
+                # Only reset if this task is still the current one (prevents race condition)
+                # This prevents a cancelled task from resetting state after a new task has started
+                if self._setpoint_read_task is task_container[0]:
+                    self._setpoint_read_in_progress = False
+                    self._setpoint_read_task = None
 
         task = asyncio.create_task(do_read())
+        task_container[0] = task
         self._setpoint_read_task = task
 
     def update_state(self, **state):
@@ -108,7 +120,6 @@ class PlejdClimate(PlejdOutput):
         _LOGGER.debug(f"PlejdClimate.update_state() received: {state}")
         
         state = dict(state)
-        trigger_reason = None
         
         # Handle setpoint from 0x5c messages
         if STATE_KEY_SETPOINT in state:
@@ -126,12 +137,21 @@ class PlejdClimate(PlejdOutput):
                 # Check if readback is close to cached value (within threshold)
                 # This prevents old readback values from overwriting newly set values
                 cached_setpoint = self._state.get(STATE_KEY_SETPOINT)
+                now = time.monotonic()
+                time_since_write = now - self._last_setpoint_write_time
+                
+                # If we recently wrote a setpoint (within 3 seconds), be more strict about rejecting readbacks
+                # This prevents readbacks from overwriting values we just set
                 if cached_setpoint is not None:
                     diff = abs(setpoint_value - cached_setpoint)
-                    if diff > STALE_SETPOINT_THRESHOLD:
+                    # Use >= instead of > to catch edge cases, and be stricter if we just wrote
+                    threshold = STALE_SETPOINT_THRESHOLD if time_since_write > 3.0 else 0.5
+                    
+                    if diff >= threshold:
                         _LOGGER.warning(
                             f"PlejdClimate: Ignoring stale readback: {setpoint_value}°C "
-                            f"(cached: {cached_setpoint}°C, diff: {diff:.1f}°C)"
+                            f"(cached: {cached_setpoint}°C, diff: {diff:.1f}°C, "
+                            f"time_since_write: {time_since_write:.1f}s)"
                         )
                         # Remove setpoint from state so it doesn't overwrite cached value
                         state.pop(STATE_KEY_SETPOINT, None)
@@ -147,14 +167,14 @@ class PlejdClimate(PlejdOutput):
                 _LOGGER.debug(f"PlejdClimate: Processing setpoint={setpoint_value}°C (source={source})")
                 # Setpoint is already in state, will be passed to parent
                 # This overrides any cached setpoint with device-confirmed value
-                self._last_setpoint_refresh = time.monotonic()
         
         # Handle status messages (0x98 pattern)
         # Status messages contain "temperature" (current) field from status2 byte
         if STATE_KEY_TEMPERATURE in state:
             state[STATE_KEY_CURRENT_TEMPERATURE] = state[STATE_KEY_TEMPERATURE]
             _LOGGER.debug(f"PlejdClimate: Processing status message, current={state[STATE_KEY_CURRENT_TEMPERATURE]}")
-            trigger_reason = trigger_reason or TRIGGER_TEMPERATURE_UPDATE
+            # Don't trigger setpoint reads on temperature updates - temperature changes frequently
+            # Setpoint only changes when user sets it or device initializes
 
         if STATE_KEY_MAX_TEMPERATURE in state:
             max_temp_value = state[STATE_KEY_MAX_TEMPERATURE]
@@ -170,23 +190,29 @@ class PlejdClimate(PlejdOutput):
             self._room_max_temp = state[STATE_KEY_ROOM_MAX_TEMPERATURE]
             state[STATE_KEY_ROOM_MAX_TEMP] = self._room_max_temp
 
-        if state.get(STATE_KEY_AVAILABLE):
-            trigger_reason = trigger_reason or TRIGGER_DEVICE_AVAILABLE
-        self._maybe_schedule_limit_read()
+        # Check for availability transition (False → True) to trigger initialization reads
+        current_available = state.get(STATE_KEY_AVAILABLE, self._was_available)
+        availability_transition = current_available and not self._was_available
+        
+        if current_available:
+            # Schedule limit reads if missing (keeps retrying until all limits received)
+            if not self._has_all_limits():
+                self._maybe_schedule_limit_read()
+        else:
+            # Device became unavailable - cancel all background tasks
+            self._cancel_all_tasks()
+        
+        # Update availability tracking
+        self._was_available = current_available
         
         _LOGGER.debug(f"PlejdClimate.update_state() calling parent with: {state}")
         
         # Call parent to update state and notify listeners
         super().update_state(**state)
 
-        if trigger_reason:
-            self._maybe_schedule_setpoint_read(trigger_reason)
-        else:
-            # Ensure we still fetch max temperature even if no trigger reason set yet
-            if not self._state.get(STATE_KEY_MAX_TEMPERATURE):
-                self._maybe_schedule_limit_read()
-            elif not self._has_all_limits():
-                self._maybe_schedule_limit_read()
+        # Only schedule setpoint read on device availability transition (initialization)
+        if availability_transition:
+            self._maybe_schedule_setpoint_read(TRIGGER_DEVICE_AVAILABLE)
 
     def parse_state(self, update, state):
         available = state.get(STATE_KEY_AVAILABLE, False)
@@ -229,11 +255,14 @@ class PlejdClimate(PlejdOutput):
         sent_values = await self._mesh.set_state(self.address, setpoint=setpoint)
         
         # Update local state with the ACTUAL setpoint that was sent
-        # This is the source of truth, not the unreliable device readback
+        # This is the source of truth - we don't need to read it back since we just set it
         if sent_values and STATE_KEY_SETPOINT in sent_values:
+            # Track when we wrote the setpoint to reject any stale readbacks that might come in
+            self._last_setpoint_write_time = time.monotonic()
             self.update_state(setpoint=sent_values[STATE_KEY_SETPOINT])
         
-        self._maybe_schedule_setpoint_read(TRIGGER_POST_SET_TEMPERATURE, force=True)
+        # Don't request readback - we already know what we set, and readbacks can be stale
+        # Setpoint reads only happen on device initialization
 
     async def set_mode(self, mode: str):
         """Set thermostat HVAC mode ("off" or "heat")."""
@@ -265,8 +294,11 @@ class PlejdClimate(PlejdOutput):
         await self.set_mode(MODE_HEAT)
 
     def _maybe_schedule_limit_read(self):
+        # Check if task is already running (not just if it exists)
+        if self._max_temp_read_task and not self._max_temp_read_task.done():
+            return
 
-        if self._max_temp_read_task or not self._mesh:
+        if not self._mesh:
             return
 
         if self._has_all_limits():
@@ -275,8 +307,16 @@ class PlejdClimate(PlejdOutput):
         async def do_read():
             try:
                 await asyncio.sleep(0.5)
+                # Check if task was cancelled or device is no longer valid
+                if not self._mesh:
+                    return
                 _LOGGER.debug("PlejdClimate: Requesting thermostat limits read")
                 await self._mesh.read_thermostat_limits(self.address)
+            except asyncio.CancelledError:
+                _LOGGER.debug("PlejdClimate: Limit read task cancelled")
+                raise
+            except Exception as e:
+                _LOGGER.warning(f"PlejdClimate: Error in limit read task: {e}")
             finally:
                 self._max_temp_read_task = None
 
@@ -289,4 +329,26 @@ class PlejdClimate(PlejdOutput):
             and self._floor_max_temp is not None
             and self._room_max_temp is not None
         )
+
+    def _cancel_all_tasks(self):
+        """Cancel all running background tasks to prevent them from outliving the device instance."""
+        tasks_cancelled = 0
+        
+        if self._setpoint_read_task and not self._setpoint_read_task.done():
+            self._setpoint_read_task.cancel()
+            tasks_cancelled += 1
+            _LOGGER.debug("PlejdClimate: Cancelled setpoint read task")
+        
+        if self._max_temp_read_task and not self._max_temp_read_task.done():
+            self._max_temp_read_task.cancel()
+            tasks_cancelled += 1
+            _LOGGER.debug("PlejdClimate: Cancelled limit read task")
+        
+        if tasks_cancelled > 0:
+            _LOGGER.debug(f"PlejdClimate: Cancelled {tasks_cancelled} background task(s)")
+        
+        # Reset task references
+        self._setpoint_read_task = None
+        self._max_temp_read_task = None
+        self._setpoint_read_in_progress = False
 

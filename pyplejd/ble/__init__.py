@@ -85,7 +85,7 @@ class PlejdMesh:
             return False
         try:
             await self._client.stop_notify(gatt.PLEJD_LASTDATA)
-            await self._client.stop_notify(gatt.PLEJD_LIGHTLEVEL)
+            await self._client.stop_notify(gatt.PLEJD_POLL)
             await self._client.disconnect()
         except BleakError:
             pass
