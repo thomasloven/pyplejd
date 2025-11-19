@@ -198,10 +198,8 @@ class PlejdMesh:
         return retval
 
     async def set_state(self, address: int, **state):
-        payloads, sent_values = payload_encode.set_state(self, address, **state)
+        payloads, _ = payload_encode.set_state(self, address, **state)
         await self._write(payloads)
-        # Return the actual values that were sent (e.g., setpoint) so device can update local state
-        return sent_values
 
     async def activate_scene(self, index: int):
         payloads = payload_encode.trigger_scene(self, index)

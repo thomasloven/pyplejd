@@ -260,19 +260,12 @@ class PlejdClimate(PlejdOutput):
         if not self._mesh:
             return
         
-        # Send the command and get back the actual value that was sent
-        # The returned value is what was encoded and sent to the device
-        sent_values = await self._mesh.set_state(self.address, setpoint=setpoint)
+        # Send the command - device will confirm via write_ack or push_5c notification
+        await self._mesh.set_state(self.address, setpoint=setpoint)
         
-        # Update local state with the ACTUAL setpoint that was sent
-        # This is the source of truth - we don't need to read it back since we just set it
-        if sent_values and STATE_KEY_SETPOINT in sent_values:
-            # Track when we wrote the setpoint to reject any stale readbacks that might come in
-            self._last_setpoint_write_time = time.monotonic()
-            self.update_state(setpoint=sent_values[STATE_KEY_SETPOINT])
-        
-        # Don't request readback - we already know what we set, and readbacks can be stale
-        # Setpoint reads only happen on device initialization
+        # Track when we wrote the setpoint to reject any stale readbacks that might come in
+        # State will be updated when device confirms via write_ack or push_5c
+        self._last_setpoint_write_time = time.monotonic()
 
     async def set_mode(self, mode: str):
         """Set thermostat HVAC mode ("off" or "heat")."""

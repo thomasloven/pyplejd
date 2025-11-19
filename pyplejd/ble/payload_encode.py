@@ -89,25 +89,21 @@ def set_state(mesh: PlejdMesh, address, **state):
             address,
         )
 
-    # Track the actual setpoint value being sent (for local state update)
-    actual_setpoint = None
     if (setpoint := state.get("setpoint", None)) is not None:
         # Setpoint temperature command
         # AA 0110 045c TTTT
         # Temperature encoded as 16-bit little-endian integer (value * 10)
-        # Round to nearest 0.5°C to avoid encoding issues
-        setpoint_rounded = round(setpoint * 2) / 2  # Round to nearest 0.5
+        # Round to nearest degree to avoid encoding issues
+        setpoint_rounded = round(setpoint)  # Round to nearest degree
         temp_value = int(setpoint_rounded * 10)
         temp_bytes = temp_value.to_bytes(2, "little")
         payloads.append(f"{address:02x} 0110 045c {temp_bytes.hex()}")
         send_log(f"SETPOINT command {hex_payload(payloads[-1])} ({setpoint_rounded}°C)", address)
-        actual_setpoint = setpoint_rounded  # Store the actual value we're sending
 
     encoded = encode(mesh, payloads)
     
-    # Return both the encoded payloads and the metadata about what was sent
-    # This allows the device to update its local state with the sent setpoint
-    return encoded, {"setpoint": actual_setpoint} if actual_setpoint is not None else {}
+    # Return encoded payloads (device will confirm via write_ack or push_5c notifications)
+    return encoded, {}
 
 
 def trigger_scene(mesh: PlejdMesh, index):
