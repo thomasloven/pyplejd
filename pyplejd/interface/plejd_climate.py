@@ -24,13 +24,11 @@ STATE_KEY_HEATING = "heating"
 STATE_KEY_FLOOR_MIN_TEMPERATURE = "floor_min_temperature"
 STATE_KEY_FLOOR_MAX_TEMPERATURE = "floor_max_temperature"
 STATE_KEY_ROOM_MAX_TEMPERATURE = "room_max_temperature"
-STATE_KEY_MAX_TEMPERATURE = "max_temperature"
 STATE_KEY_AVAILABLE = "available"
 STATE_KEY_MSG_TYPE = "msg_type"
 STATE_KEY_FLOOR_MIN_TEMP = "floor_min_temp"
 STATE_KEY_FLOOR_MAX_TEMP = "floor_max_temp"
 STATE_KEY_ROOM_MAX_TEMP = "room_max_temp"
-STATE_KEY_MAX_TEMP = "max_temp"
 
 # Message types
 MSG_TYPE_WRITE_ACK = "write_ack"
@@ -86,7 +84,6 @@ class PlejdClimate(PlejdOutput):
             STATE_KEY_FLOOR_MIN_TEMPERATURE,
             STATE_KEY_FLOOR_MAX_TEMPERATURE,
             STATE_KEY_ROOM_MAX_TEMPERATURE,
-            STATE_KEY_MAX_TEMPERATURE,
         }
         if any(key in state for key in climate_keys):
             return super().match_state(state)
@@ -206,10 +203,6 @@ class PlejdClimate(PlejdOutput):
             # Don't trigger setpoint reads on temperature updates - temperature changes frequently
             # Setpoint only changes when user sets it or device initializes
 
-        if STATE_KEY_MAX_TEMPERATURE in state:
-            max_temp_value = state[STATE_KEY_MAX_TEMPERATURE]
-            _LOGGER.debug(f"PlejdClimate: Received max_temperature={max_temp_value}°C (msg_type={state.get(STATE_KEY_MSG_TYPE)})")
-
         if STATE_KEY_FLOOR_MIN_TEMPERATURE in state:
             self._floor_min_temp = state[STATE_KEY_FLOOR_MIN_TEMPERATURE]
             state[STATE_KEY_FLOOR_MIN_TEMP] = self._floor_min_temp
@@ -273,9 +266,6 @@ class PlejdClimate(PlejdOutput):
         # Get setpoint temperature
         if STATE_KEY_SETPOINT in state:
             parsed[STATE_KEY_SETPOINT] = state[STATE_KEY_SETPOINT]
-
-        if STATE_KEY_MAX_TEMPERATURE in state:
-            parsed[STATE_KEY_MAX_TEMP] = state[STATE_KEY_MAX_TEMPERATURE]
 
         if self._floor_min_temp is not None:
             parsed[STATE_KEY_FLOOR_MIN_TEMP] = self._floor_min_temp
@@ -388,12 +378,11 @@ class PlejdClimate(PlejdOutput):
         """Check if all required thermostat temperature limits have been received.
         
         Returns:
-            bool: True if all limits (max_temperature, floor_min_temp, 
-                  floor_max_temp, room_max_temp) are known, False otherwise
+            bool: True if all limits (floor_min_temp, floor_max_temp, 
+                  room_max_temp) are known, False otherwise
         """
         return (
-            self._state.get(STATE_KEY_MAX_TEMPERATURE) is not None
-            and self._floor_min_temp is not None
+            self._floor_min_temp is not None
             and self._floor_max_temp is not None
             and self._room_max_temp is not None
         )
