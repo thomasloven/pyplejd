@@ -258,9 +258,9 @@ class PlejdClimate(PlejdOutput):
     async def set_temperature(self, setpoint: float):
         """Set the target temperature (setpoint) for the thermostat.
         
-        Sends the setpoint command to the device via BLE. After the device responds
-        with a 0x98 status message, a setpoint read will be scheduled to get the
-        device-confirmed value.
+        Sends the setpoint command to the device via BLE. Updates the local state
+        immediately to ensure cache coherency when the device sends intermediate
+        status updates (0x98) before the final setpoint confirmation (01 03).
         
         Args:
             setpoint: Target temperature in degrees Celsius (will be rounded to nearest degree)
@@ -270,6 +270,12 @@ class PlejdClimate(PlejdOutput):
         
         # Send the command - device will respond with 0x98 status, then we'll read the setpoint
         await self._mesh.set_state(self.address, setpoint=setpoint)
+        
+        # Optimistically update local state cache.
+        # This prevents the subsequent 0x98 status message (which lacks setpoint data)
+        # from broadcasting the old setpoint value to listeners, causing a UI glitch.
+        # The value will be verified/overwritten when the readback confirmation arrives.
+        self.update_state(**{STATE_KEY_SETPOINT: setpoint})
         
         # Track when we wrote the setpoint to detect 0x98 write confirmations
         self._last_setpoint_write_time = time.monotonic()
