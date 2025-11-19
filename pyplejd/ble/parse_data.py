@@ -256,9 +256,7 @@ def parse_data(data: bytearray, device_types: dict | None = None):
             }
 
         case [addr, 0x01, 0x10, 0x04, 0x20, a, 0x03, b, *extra, ll1, ll2]:
-            # Motion sensor detection
-            # Format: AA 01 10 04 20 [a] 03 [b] [extra] [ll1] [ll2]
-            # The last two bytes (ll1, ll2) represent light level (luminance)
+            # Motion 
             lightlevel = int.from_bytes([ll1, ll2], "big")
             rec_log(f"MOTION {a}-3-{b} {extra=} {lightlevel=}", addr)
             rec_log(f"    {data_hex}", addr)
