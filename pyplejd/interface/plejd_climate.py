@@ -50,8 +50,18 @@ TRIGGER_DEVICE_AVAILABLE = "device_available"
 
 
 class PlejdClimate(PlejdOutput):
+    """Represents a Plejd thermostat/climate control device.
+    
+    Handles temperature setpoint, current temperature, HVAC mode, and temperature limits.
+    Manages background tasks for reading device state and prevents stale data from overwriting
+    recent writes.
+    """
 
     def __init__(self, *args, **kwargs):
+        """Initialize the PlejdClimate device.
+        
+        Sets up device type, internal state tracking, and background task management.
+        """
         super().__init__(*args, **kwargs)
         self.outputType = PlejdDeviceType.CLIMATE
         self._setpoint_read_in_progress = False
@@ -126,7 +136,17 @@ class PlejdClimate(PlejdOutput):
         self._setpoint_read_task = task
 
     def update_state(self, **state):
+        """Update device state from incoming BLE messages.
         
+        Processes setpoint updates (with stale readback detection), temperature updates,
+        mode updates, and limit updates. Handles availability transitions to trigger
+        initialization reads. Filters out stale setpoint readbacks that might overwrite
+        recently written values.
+        
+        Args:
+            **state: Dictionary containing device state updates (setpoint, temperature,
+                    mode, limits, available, etc.)
+        """
         _LOGGER.debug(f"PlejdClimate.update_state() received: {state}")
         
         state = dict(state)
@@ -225,11 +245,22 @@ class PlejdClimate(PlejdOutput):
             self._maybe_schedule_setpoint_read(TRIGGER_DEVICE_AVAILABLE)
 
     def parse_state(self, update, state):
+        """Parse and format device state for external consumption.
+        
+        Converts internal state keys to standardized format expected by consumers
+        (e.g., Home Assistant). Maps temperature limits from internal storage to
+        parsed state dictionary.
+        
+        Args:
+            update: New state update dictionary
+            state: Accumulated state dictionary (already merged with update)
+        
+        Returns:
+            dict: Parsed state with standardized keys (available, mode, current_temperature,
+                  setpoint, max_temp, floor_min_temp, floor_max_temp, room_max_temp)
+        """
         available = state.get(STATE_KEY_AVAILABLE, False)
-        
-        # Note: 'update' is the new update, 'state' is the accumulated state (already merged)
-        # Temperature and setpoint are now stored separately in state
-        
+                
         parsed = {
             STATE_KEY_AVAILABLE: available,
             STATE_KEY_MODE: state.get(STATE_KEY_MODE, MODE_OFF),  # Default to "off" if not set
@@ -256,7 +287,15 @@ class PlejdClimate(PlejdOutput):
         return parsed
 
     async def set_temperature(self, setpoint: float):
-        """Set the target temperature (setpoint) for the thermostat."""
+        """Set the target temperature (setpoint) for the thermostat.
+        
+        Sends the setpoint command to the device via BLE. The device will confirm
+        the write via write_ack or push_5c notification, which will update the
+        local state. Tracks write time to reject stale readbacks.
+        
+        Args:
+            setpoint: Target temperature in degrees Celsius (will be rounded to nearest degree)
+        """
         if not self._mesh:
             return
         
@@ -268,7 +307,14 @@ class PlejdClimate(PlejdOutput):
         self._last_setpoint_write_time = time.monotonic()
 
     async def set_mode(self, mode: str):
-        """Set thermostat HVAC mode ("off" or "heat")."""
+        """Set thermostat HVAC mode.
+        
+        Accepts "off", "standby", or "heat" (case-insensitive). If the device
+        is already in the requested mode, no command is sent.
+        
+        Args:
+            mode: HVAC mode string ("off", "standby", or "heat")
+        """
         if not self._mesh:
             return
 
@@ -287,11 +333,19 @@ class PlejdClimate(PlejdOutput):
         await self._mesh.set_state(self.address, thermostat_mode=payload_mode)
 
     async def turn_off(self):
+        """Turn off the thermostat (set mode to OFF).
+        
+        Convenience method that sets the HVAC mode to "off".
+        """
         if not self._mesh:
             return
         await self.set_mode(MODE_OFF)
 
     async def turn_on(self):
+        """Turn on the thermostat (set mode to HEAT).
+        
+        Convenience method that sets the HVAC mode to "heat".
+        """
         if not self._mesh:
             return
         await self.set_mode(MODE_HEAT)
