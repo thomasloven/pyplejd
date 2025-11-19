@@ -258,37 +258,65 @@ class PlejdMesh:
             _LOGGER.warning("Plejd mesh keepalive signal failed: %s", str(e))
         return False
 
-    async def read_setpoint(self, address: int):
-        """Request setpoint read using 01 02 pattern.
+    async def _read_register(self, address: int, register: str, sub_ids: list[int] | None = None, operation_name: str = "read"):
+        """Internal helper to send register read requests via BLE.
         
-        Returns the decoded setpoint temperature in °C, or None if read fails.
-        Response will come via notification.
+        Args:
+            address: Device address to read from
+            register: Register address in hex format (e.g., "045c" or "0460")
+            sub_ids: Optional list of sub-IDs to read (for registers that support sub-IDs)
+            operation_name: Human-readable name for logging (e.g., "setpoint read", "thermostat limits")
+        
+        Returns:
+            None - Responses come via notification (_lastdata_listener)
         """
         client = self._client
         if client is None:
-            _LOGGER.warning("Cannot read setpoint: not connected")
+            _LOGGER.warning(f"Cannot {operation_name}: not connected")
             return None
         
         try:
             async with self._ble_lock:
-                # Send read request command for setpoint register 0x5c
-                # Format: AA 01 02 04 5c
-                read_cmd = f"{address:02x} 0102 045c"
-                payloads = payload_encode.encode(self, [read_cmd])
+                # Build read commands
+                if sub_ids:
+                    # Multiple commands for registers with sub-IDs
+                    read_cmds = [f"{address:02x} 0102 {register} {sub_id:02x}" for sub_id in sub_ids]
+                else:
+                    # Single command for simple register reads
+                    read_cmds = [f"{address:02x} 0102 {register}"]
+                
+                # Encode and send all commands
+                payloads = payload_encode.encode(self, read_cmds)
                 for payload in payloads:
                     await client.write_gatt_char(gatt.PLEJD_DATA, payload, response=True)
                 
-                _LOGGER.debug(f"Requested setpoint read for device {address} using 01 02 pattern, waiting for notification...")
-                await asyncio.sleep(READ_RESPONSE_DELAY)  # Give device time to respond
+                # Log the operation
+                if sub_ids:
+                    sub_ids_str = "/".join(f"{sid:02x}" for sid in sub_ids)
+                    _LOGGER.debug(f"Requested {operation_name} for device {address} (sub_ids {sub_ids_str})")
+                else:
+                    _LOGGER.debug(f"Requested {operation_name} for device {address} using 01 02 pattern, waiting for notification...")
                 
-                # Response will come via notification (_lastdata_listener)
-                # We can't easily wait for it here without a callback mechanism
-                # The setpoint will be updated when the notification arrives
+                await asyncio.sleep(READ_RESPONSE_DELAY)  # Give device time to respond
                 return None  # Response comes via notification, not direct return
                     
         except Exception as e:
-            _LOGGER.warning(f"Failed to request setpoint read for device {address}: {e}")
+            _LOGGER.warning(f"Failed to request {operation_name} for device {address}: {e}")
             return None
+
+    async def read_setpoint(self, address: int):
+        """Request setpoint read using 01 02 pattern.
+        
+        Reads the setpoint temperature from register 0x5c.
+        Response will come via notification (_lastdata_listener).
+        
+        Args:
+            address: Device address to read setpoint from
+            
+        Returns:
+            None - Response comes via notification, not direct return
+        """
+        return await self._read_register(address, "045c", operation_name="setpoint read")
 
     async def read_thermostat_limits(self, address: int):
         """Request thermostat limit information via 0x0460 register.
@@ -306,26 +334,12 @@ class PlejdMesh:
             None - Responses come via notification (_lastdata_listener)
             The limits will be updated when notifications arrive
         """
-        client = self._client
-        if client is None:
-            _LOGGER.warning("Cannot read thermostat limits: not connected")
-            return None
-
-        try:
-            async with self._ble_lock:
-                for sub_id in (0x00, 0x01, 0x02):
-                    read_cmd = f"{address:02x} 0102 0460 {sub_id:02x}"
-                    payloads = payload_encode.encode(self, [read_cmd])
-                    for payload in payloads:
-                        await client.write_gatt_char(gatt.PLEJD_DATA, payload, response=True)
-
-                _LOGGER.debug(f"Requested thermostat limits for device {address} (sub_ids 00/01/02)")
-                await asyncio.sleep(READ_RESPONSE_DELAY)
-                return None
-
-        except Exception as e:
-            _LOGGER.warning(f"Failed to request thermostat limits for device {address}: {e}")
-            return None
+        return await self._read_register(
+            address, 
+            "0460", 
+            sub_ids=[0x00, 0x01, 0x02],
+            operation_name="thermostat limits"
+        )
 
     async def _authenticate(self, client: BleakClient):
         if client is None:

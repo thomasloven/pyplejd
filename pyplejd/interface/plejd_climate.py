@@ -277,7 +277,9 @@ class PlejdClimate(PlejdOutput):
         """Set thermostat HVAC mode.
         
         Accepts "off", "standby", or "heat" (case-insensitive). If the device
-        is already in the requested mode, no command is sent.
+        is already in the requested mode, no command is sent. Updates the local
+        state immediately to ensure cache coherency when the device sends intermediate
+        status updates (0x98) before the final mode confirmation.
         
         Args:
             mode: HVAC mode string ("off", "standby", or "heat")
@@ -297,7 +299,14 @@ class PlejdClimate(PlejdOutput):
         if current == target:
             return
 
+        # Send the command - device will respond with 0x98 status
         await self._mesh.set_state(self.address, thermostat_mode=payload_mode)
+        
+        # Optimistically update local state cache.
+        # This prevents the subsequent 0x98 status message (which may lack mode data)
+        # from broadcasting the old mode value to listeners, causing a UI glitch.
+        # The value will be verified/overwritten when the device confirms via notification.
+        self.update_state(**{STATE_KEY_MODE: target})
 
     async def turn_off(self):
         """Turn off the thermostat (set mode to OFF).
