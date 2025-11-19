@@ -7,13 +7,11 @@ from .plejd_device import PlejdOutput, PlejdDeviceType
 _LOGGER = logging.getLogger(__name__)
 
 
-STALE_SETPOINT_THRESHOLD = 2.0  # Degrees Celsius difference to treat readback as stale
-STALE_SETPOINT_RECENT_WRITE_TIME = 3.0  # Seconds after write to use stricter threshold
-STALE_SETPOINT_RECENT_WRITE_DIFF = 0.5  # Stricter threshold (degrees C) for readbacks after recent write
-
 # Task scheduling delays (seconds)
 SETPOINT_READ_DELAY = 1.0  # Delay before requesting setpoint read
+SETPOINT_READ_AFTER_WRITE_DELAY = 0.3  # Delay after 0x98 status before reading setpoint after write
 LIMIT_READ_DELAY = 0.5  # Delay before requesting limit read
+WRITE_CONFIRMATION_WINDOW = 2.0  # Seconds after write to consider 0x98 as write confirmation
 
 # State keys
 STATE_KEY_SETPOINT = "setpoint"
@@ -45,6 +43,7 @@ MODE_HEAT = "heat"
 
 # Trigger reasons
 TRIGGER_DEVICE_AVAILABLE = "device_available"
+TRIGGER_AFTER_WRITE = "after_write"
 
 
 class PlejdClimate(PlejdOutput):
@@ -69,7 +68,7 @@ class PlejdClimate(PlejdOutput):
         self._floor_max_temp = None
         self._room_max_temp = None
         self._was_available = False  # Track previous availability state to detect transitions
-        self._last_setpoint_write_time = 0.0  # Track when setpoint was last written to reject stale readbacks
+        self._last_setpoint_write_time = 0.0  # Track when setpoint was last written to detect 0x98 write confirmations
 
     def match_state(self, state):
         """
@@ -110,7 +109,9 @@ class PlejdClimate(PlejdOutput):
 
         async def do_read():
             try:
-                await asyncio.sleep(SETPOINT_READ_DELAY)
+                # Use shorter delay for reads after writes (we already got 0x98 confirmation)
+                delay = SETPOINT_READ_AFTER_WRITE_DELAY if reason == TRIGGER_AFTER_WRITE else SETPOINT_READ_DELAY
+                await asyncio.sleep(delay)
                 # Check if task was cancelled or device is no longer valid
                 if not self._mesh:
                     return
@@ -135,10 +136,9 @@ class PlejdClimate(PlejdOutput):
     def update_state(self, **state):
         """Update device state from incoming BLE messages.
         
-        Processes setpoint updates (with stale readback detection), temperature updates,
-        mode updates, and limit updates. Handles availability transitions to trigger
-        initialization reads. Filters out stale setpoint readbacks that might overwrite
-        recently written values.
+        Processes setpoint updates, temperature updates, mode updates, and limit updates.
+        Handles availability transitions to trigger initialization reads. Schedules
+        setpoint reads after writes when 0x98 status messages are received.
         
         Args:
             **state: Dictionary containing device state updates (setpoint, temperature,
@@ -161,34 +161,7 @@ class PlejdClimate(PlejdOutput):
                 source = MSG_TYPE_PUSH_5C
             elif msg_type == MSG_TYPE_READ_01_02:
                 source = MSG_TYPE_READ_01_02_PATTERN
-                # Check if readback is close to cached value (within threshold)
-                # This prevents old readback values from overwriting newly set values
-                cached_setpoint = self._state.get(STATE_KEY_SETPOINT)
-                now = time.monotonic()
-                time_since_write = now - self._last_setpoint_write_time
-                
-                # If we recently wrote a setpoint (within STALE_SETPOINT_RECENT_WRITE_TIME), be more strict about rejecting readbacks
-                # This prevents readbacks from overwriting values we just set
-                if cached_setpoint is not None:
-                    diff = abs(setpoint_value - cached_setpoint)
-                    # Use >= instead of > to catch edge cases, and be stricter if we just wrote
-                    threshold = STALE_SETPOINT_THRESHOLD if time_since_write > STALE_SETPOINT_RECENT_WRITE_TIME else STALE_SETPOINT_RECENT_WRITE_DIFF
-                    
-                    if diff >= threshold:
-                        _LOGGER.warning(
-                            f"PlejdClimate: Ignoring stale readback: {setpoint_value}°C "
-                            f"(cached: {cached_setpoint}°C, diff: {diff:.1f}°C, "
-                            f"time_since_write: {time_since_write:.1f}s)"
-                        )
-                        # Remove setpoint from state so it doesn't overwrite cached value
-                        state.pop(STATE_KEY_SETPOINT, None)
-                        state.pop(STATE_KEY_MSG_TYPE, None)
-                        should_process_setpoint = False
-                        # Continue processing other fields, just skip this setpoint
-                    else:
-                        _LOGGER.debug(f"PlejdClimate: Got setpoint via 01 02 pattern: {setpoint_value}°C")
-                else:
-                    _LOGGER.debug(f"PlejdClimate: Got setpoint via 01 02 pattern: {setpoint_value}°C")
+                _LOGGER.debug(f"PlejdClimate: Got setpoint via 01 02 pattern: {setpoint_value}°C")
             
             if should_process_setpoint:
                 _LOGGER.debug(f"PlejdClimate: Processing setpoint={setpoint_value}°C (source={source})")
@@ -200,8 +173,14 @@ class PlejdClimate(PlejdOutput):
         if STATE_KEY_TEMPERATURE in state:
             state[STATE_KEY_CURRENT_TEMPERATURE] = state[STATE_KEY_TEMPERATURE]
             _LOGGER.debug(f"PlejdClimate: Processing status message, current={state[STATE_KEY_CURRENT_TEMPERATURE]}")
-            # Don't trigger setpoint reads on temperature updates - temperature changes frequently
-            # Setpoint only changes when user sets it or device initializes
+            
+            # If we recently wrote a setpoint, this 0x98 message is likely the write confirmation
+            # Schedule a read to get the device-confirmed setpoint value
+            now = time.monotonic()
+            time_since_write = now - self._last_setpoint_write_time
+            if time_since_write < WRITE_CONFIRMATION_WINDOW and self._last_setpoint_write_time > 0:
+                _LOGGER.debug(f"PlejdClimate: Received 0x98 status after setpoint write ({time_since_write:.2f}s ago), scheduling setpoint read")
+                self._maybe_schedule_setpoint_read(TRIGGER_AFTER_WRITE)
 
         if STATE_KEY_FLOOR_MIN_TEMPERATURE in state:
             self._floor_min_temp = state[STATE_KEY_FLOOR_MIN_TEMPERATURE]
@@ -279,9 +258,9 @@ class PlejdClimate(PlejdOutput):
     async def set_temperature(self, setpoint: float):
         """Set the target temperature (setpoint) for the thermostat.
         
-        Sends the setpoint command to the device via BLE. The device will confirm
-        the write via write_ack or push_5c notification, which will update the
-        local state. Tracks write time to reject stale readbacks.
+        Sends the setpoint command to the device via BLE. After the device responds
+        with a 0x98 status message, a setpoint read will be scheduled to get the
+        device-confirmed value.
         
         Args:
             setpoint: Target temperature in degrees Celsius (will be rounded to nearest degree)
@@ -289,11 +268,10 @@ class PlejdClimate(PlejdOutput):
         if not self._mesh:
             return
         
-        # Send the command - device will confirm via write_ack or push_5c notification
+        # Send the command - device will respond with 0x98 status, then we'll read the setpoint
         await self._mesh.set_state(self.address, setpoint=setpoint)
         
-        # Track when we wrote the setpoint to reject any stale readbacks that might come in
-        # State will be updated when device confirms via write_ack or push_5c
+        # Track when we wrote the setpoint to detect 0x98 write confirmations
         self._last_setpoint_write_time = time.monotonic()
 
     async def set_mode(self, mode: str):
