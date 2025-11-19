@@ -50,8 +50,7 @@ class PlejdClimate(PlejdOutput):
     """Represents a Plejd thermostat/climate control device.
     
     Handles temperature setpoint, current temperature, HVAC mode, and temperature limits.
-    Manages background tasks for reading device state and prevents stale data from overwriting
-    recent writes.
+    Manages background tasks for reading device state.
     """
 
     def __init__(self, *args, **kwargs):
@@ -61,7 +60,6 @@ class PlejdClimate(PlejdOutput):
         """
         super().__init__(*args, **kwargs)
         self.outputType = PlejdDeviceType.CLIMATE
-        self._setpoint_read_in_progress = False
         self._setpoint_read_task = None
         self._max_temp_read_task = None
         self._floor_min_temp = None
@@ -102,8 +100,6 @@ class PlejdClimate(PlejdOutput):
         if self._setpoint_read_task and not self._setpoint_read_task.done():
             return
 
-        self._setpoint_read_in_progress = True
-
         # Use a list to hold task reference that can be updated after closure creation
         task_container = [None]
 
@@ -126,7 +122,6 @@ class PlejdClimate(PlejdOutput):
                 # Only reset if this task is still the current one (prevents race condition)
                 # This prevents a cancelled task from resetting state after a new task has started
                 if self._setpoint_read_task is task_container[0]:
-                    self._setpoint_read_in_progress = False
                     self._setpoint_read_task = None
 
         task = asyncio.create_task(do_read())
@@ -153,7 +148,6 @@ class PlejdClimate(PlejdOutput):
             msg_type = state.get(STATE_KEY_MSG_TYPE)
             setpoint_value = state[STATE_KEY_SETPOINT]
             source = MSG_TYPE_UNKNOWN
-            should_process_setpoint = True
             
             if msg_type == MSG_TYPE_WRITE_ACK:
                 source = MSG_TYPE_WRITE_ACK
@@ -163,10 +157,9 @@ class PlejdClimate(PlejdOutput):
                 source = MSG_TYPE_READ_01_02_PATTERN
                 _LOGGER.debug(f"PlejdClimate: Got setpoint via 01 02 pattern: {setpoint_value}°C")
             
-            if should_process_setpoint:
-                _LOGGER.debug(f"PlejdClimate: Processing setpoint={setpoint_value}°C (source={source})")
-                # Setpoint is already in state, will be passed to parent
-                # This overrides any cached setpoint with device-confirmed value
+            _LOGGER.debug(f"PlejdClimate: Processing setpoint={setpoint_value}°C (source={source})")
+            # Setpoint is already in state, will be passed to parent
+            # This overrides any cached setpoint with device-confirmed value
         
         # Handle status messages (0x98 pattern)
         # Status messages contain "temperature" (current) field from status2 byte
@@ -391,5 +384,4 @@ class PlejdClimate(PlejdOutput):
         # Reset task references
         self._setpoint_read_task = None
         self._max_temp_read_task = None
-        self._setpoint_read_in_progress = False
 
