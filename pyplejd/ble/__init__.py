@@ -258,8 +258,8 @@ class PlejdMesh:
             _LOGGER.warning("Plejd mesh keepalive signal failed: %s", str(e))
         return False
 
-    async def _read_register(self, address: int, register: str, sub_ids: list[int] | None = None, operation_name: str = "read"):
-        """Internal helper to send register read requests via BLE.
+    async def read_register(self, address: int, register: str, sub_ids: list[int] | None = None, operation_name: str = "read"):
+        """Send register read requests via BLE.
         
         Args:
             address: Device address to read from
@@ -300,46 +300,10 @@ class PlejdMesh:
                 await asyncio.sleep(READ_RESPONSE_DELAY)  # Give device time to respond
                 return None  # Response comes via notification, not direct return
                     
-        except Exception as e:
+        except (BleakError, asyncio.TimeoutError) as e:
             _LOGGER.warning(f"Failed to request {operation_name} for device {address}: {e}")
             return None
 
-    async def read_setpoint(self, address: int):
-        """Request setpoint read using 01 02 pattern.
-        
-        Reads the setpoint temperature from register 0x5c.
-        Response will come via notification (_lastdata_listener).
-        
-        Args:
-            address: Device address to read setpoint from
-            
-        Returns:
-            None - Response comes via notification, not direct return
-        """
-        return await self._read_register(address, "045c", operation_name="setpoint read")
-
-    async def read_thermostat_limits(self, address: int):
-        """Request thermostat limit information via 0x0460 register.
-        
-        Reads temperature limit configuration from the device using register 0x0460
-        with different sub-IDs to retrieve:
-        - sub_id 0x00: floor_min_temperature and floor_max_temperature
-        - sub_id 0x01: floor_min_temperature and room_max_temperature
-        - sub_id 0x02: floor_min_temperature and room_max_temperature (alternative)
-        
-        Args:
-            address: Device address to read limits from
-            
-        Returns:
-            None - Responses come via notification (_lastdata_listener)
-            The limits will be updated when notifications arrive
-        """
-        return await self._read_register(
-            address, 
-            "0460", 
-            sub_ids=[0x00],  # Only read floor limits for now
-            operation_name="thermostat limits"
-        )
 
     async def _authenticate(self, client: BleakClient):
         if client is None:

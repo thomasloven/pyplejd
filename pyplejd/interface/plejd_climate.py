@@ -90,8 +90,12 @@ class PlejdClimate(PlejdOutput):
     def _maybe_schedule_setpoint_read(self, reason: str):
         """Schedule a setpoint read task if not already in progress.
         
+        Reads the thermostat setpoint temperature from the device using register 0x5c
+        via the 01 02 read pattern. The response comes via notification and contains
+        the current setpoint value in degrees Celsius.
+        
         Args:
-            reason: Reason for the read (e.g., "device_available") for logging purposes
+            reason: Reason for the read (e.g., "device_available", "after_write") for logging purposes
         """
         if not self._mesh:
             return
@@ -112,7 +116,7 @@ class PlejdClimate(PlejdOutput):
                 if not self._mesh:
                     return
                 _LOGGER.debug(f"PlejdClimate: Requesting setpoint read ({reason})")
-                await self._mesh.read_setpoint(self.address)
+                await self._mesh.read_register(self.address, "045c", operation_name="setpoint read")
             except asyncio.CancelledError:
                 _LOGGER.debug(f"PlejdClimate: Setpoint read task cancelled ({reason})")
                 raise
@@ -329,8 +333,16 @@ class PlejdClimate(PlejdOutput):
     def _maybe_schedule_limit_read(self):
         """Schedule a limit read task if not already in progress and limits are missing.
         
-        Reads thermostat temperature limits (floor min/max, room max, max temperature)
-        from the device. Only schedules if limits are not already known.
+        Reads thermostat temperature limits from the device using register 0x0460.
+        Currently reads sub_id 0x00 which provides:
+        - floor_min_temperature: Minimum allowed floor temperature
+        - floor_max_temperature: Maximum allowed floor temperature
+        
+        Note: The device also supports sub_ids 0x01 and 0x02 which provide
+        floor_min_temperature and room_max_temperature, but these are not
+        currently being read.
+        
+        Only schedules if limits are not already known.
         """
         # Check if task is already running (not just if it exists)
         if self._max_temp_read_task and not self._max_temp_read_task.done():
@@ -349,7 +361,12 @@ class PlejdClimate(PlejdOutput):
                 if not self._mesh:
                     return
                 _LOGGER.debug("PlejdClimate: Requesting thermostat limits read")
-                await self._mesh.read_thermostat_limits(self.address)
+                await self._mesh.read_register(
+                    self.address, 
+                    "0460", 
+                    sub_ids=[0x00],  # Only read floor limits for now
+                    operation_name="thermostat limits"
+                )
             except asyncio.CancelledError:
                 _LOGGER.debug("PlejdClimate: Limit read task cancelled")
                 raise
