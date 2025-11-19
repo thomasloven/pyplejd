@@ -337,7 +337,7 @@ class PlejdMesh:
         return await self._read_register(
             address, 
             "0460", 
-            sub_ids=[0x00, 0x01, 0x02],
+            sub_ids=[0x00],  # Only read floor limits for now
             operation_name="thermostat limits"
         )
 
