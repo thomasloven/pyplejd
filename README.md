@@ -52,6 +52,8 @@ Turn on `SS=01` or off `SS=00` light at address `AA`.
 
 ### `AA 0110 00C8 SS DDDD` (R0)
 
+Note: `0x98` is also used for cover position and thermostat status - device type determines interpretation.
+
 Turn on `SS=01` or off `SS=00` light at address `AA`.
 
 If turn on, set dim level to `DDDD`.
@@ -99,7 +101,7 @@ This is what the Plejd app uses to identify a button when programming it. As far
 
 ### `AA 0110 0098 SS PPPP YY` (RO)
 
-Note that this is the same command as light dim level.
+Note: `0x98` is also used for light dim level and thermostat status - device type determines interpretation.
 
 `PPPP` is the position of the cover. Encoded **little**-endian.
 
@@ -125,3 +127,75 @@ I believe the angle of the cover slats (if applicable) is adjusted by small move
 ### Stop cover movement `AA 0110 0420 030807 00` (WO)
 
 Immediately stops the movement of the cover.
+
+## Thermostats/Climate
+
+### Thermostat status `AA 0110 0098 SS [status1] [status2] [heating]` (RO)
+
+Note: `0x98` is also used for light dim level and cover position - device type determines interpretation.
+
+For climate devices, this message contains:
+- `SS`: State (0x00 = off, 0x01 = on/heating)
+- `status1`: Status byte 1
+- `status2`: Status byte 2 (lower 6 bits contain current temperature: `(status2 & 0x3F) - 10` in °C)
+- `heating`: Heating flag (0x80 = heating, otherwise idle)
+
+The current temperature is decoded from `status2` using: `temperature = (status2 & 0x3F) - 10` in degrees Celsius.
+
+### Setpoint register (0x5c)
+
+#### Write setpoint `AA 0110 045C [temp_low] [temp_high]` (R/W)
+
+Set the temperature setpoint. Temperature is encoded as 16-bit **little**-endian integer (value * 10), so `0x0A01` = 26.6°C, `0x0E01` = 30.0°C.
+
+#### Read setpoint `AA 0102 045C` → `AA 0103 045C [temp_low] [temp_high]` (R/W)
+
+Read the current setpoint using the 01 02 read pattern:
+- Send: `AA 0102 045C` (read request)
+- Receive: `AA 0103 045C [temp_low] [temp_high]` (read response)
+
+The setpoint is encoded as 16-bit **little**-endian integer (value * 10).
+
+#### Setpoint push/ack `AA 0110 045C [temp_low] [temp_high] [extra]` (RO)
+
+Device may push setpoint updates (write acknowledgment or manual knob changes). If `[extra]` bytes are present, it's a write acknowledgment; otherwise it's an unsolicited push.
+
+### Temperature limits register (0x0460)
+
+#### Read limits `AA 0102 0460 [sub_id]` → `AA 0103 0460 [sub_id] [first_low] [first_high] [second_low] [second_high]` (R/W)
+
+Read thermostat temperature limits using the 01 02 read pattern with different sub-IDs:
+- Send: `AA 0102 0460 [sub_id]` (read request)
+- Receive: `AA 0103 0460 [sub_id] [first_low] [first_high] [second_low] [second_high]` (read response)
+
+Response format depends on `sub_id`:
+- `sub_id = 0x00`: `first` = floor_min_temperature, `second` = floor_max_temperature
+- `sub_id = 0x01` or `0x02`: `first` = floor_min_temperature, `second` = room_max_temperature
+
+All temperatures are encoded as 16-bit **little**-endian integers (value * 10).
+
+### Mode registers
+
+#### Read mode (OFF) `AA 0102 045F` → `AA 0103 045F [mode]` (R/W)
+
+Read thermostat OFF mode status:
+- Send: `AA 0102 045F` (read request)
+- Receive: `AA 0103 045F [mode]` (read response)
+- `mode = 0x00`: Device is in OFF mode
+- `mode != 0x00`: Device is not in OFF mode
+
+#### Read mode (HEAT) `AA 0102 047E` → `AA 0103 047E [mode]` (R/W)
+
+Read thermostat HEAT mode status:
+- Send: `AA 0102 047E` (read request)
+- Receive: `AA 0103 047E [mode]` (read response)
+- `mode = 0x00`: Device is in HEAT mode
+- `mode != 0x00`: Device is not in HEAT mode
+
+#### Set mode `AA 0110 045F [mode]` / `AA 0110 047E [mode]` (WO)
+
+Set thermostat mode:
+- Register `0x5F`: Set OFF mode (`mode=0x00` to enable OFF)
+- Register `0x7E`: Set HEAT mode (`mode=0x00` to enable HEAT)
+
+Note: The mode is determined by which register is set to `0x00`. Setting both to non-zero or neither to zero results in an undefined state.
