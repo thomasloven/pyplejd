@@ -72,3 +72,21 @@ class PlejdScene:
     @property
     def powered(self):
         return False
+
+    @property
+    def device_identifier(self):
+        """Return device identifier tuple for compatibility with device interface.
+        
+        Scenes use their sceneId as both parts of the identifier tuple.
+        """
+        return (self.scene.sceneId, self.scene.sceneId)
+
+    @property
+    def hardware(self):
+        """Scenes don't have hardware - return placeholder for device registry compatibility."""
+        return "Scene"
+
+    @property
+    def firmware(self):
+        """Scenes don't have firmware - return None for device registry compatibility."""
+        return None

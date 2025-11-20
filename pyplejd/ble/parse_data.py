@@ -1,6 +1,103 @@
 from .debug import rec_log
+from ..interface.device_type import PlejdDeviceType
 
 THERMOSTAT_TEMP_MASK = 0x3F  # Lower six bits carry temperature information in status2
+
+
+
+def _parse_0x98_climate(addr, state, status1, status2, extra, data_hex):
+    """Parse 0x98 message for climate/thermostat devices.
+    
+    Returns dict with temperature, heating status, and HVAC mode.
+    """
+    extra_hex = "".join(f"{e:02x}" for e in extra)
+    heating = extra[0] == 0x80 if extra else None
+
+    # Temperature decoding via modulo-64 rule: lower six bits minus 10 degrees offset
+    temp_raw = status2 & THERMOSTAT_TEMP_MASK
+    current_temperature = temp_raw - 10
+    # Mode: off takes precedence when state==0; otherwise derive from heating flag
+    hvac_mode = "off" if not state else ("heating" if heating else "idle")
+
+    temp_str = f"{current_temperature}°C" if current_temperature is not None else "None (invalid)"
+    rec_log(
+        f"THERMOSTAT STATUS state={state} status1={status1} status2={status2} current={temp_str} mode={hvac_mode} heating={heating}",
+        addr,
+    )
+    rec_log(f"    {data_hex}", addr)
+    result = {
+        "address": addr,
+        "state": state,
+        "status1": status1,
+        "status2": status2,
+        "heating": heating,
+        "mode": hvac_mode,
+    }
+    if current_temperature is not None:
+        result["temperature"] = current_temperature
+    rec_log(f"THERMOSTAT STATUS RETURNING: {result}", addr)
+    return result
+
+
+def _parse_0x98_cover(addr, state, status1, status2, extra, data_hex):
+    """Parse 0x98 message for cover devices.
+    
+    Returns dict with cover position.
+    """
+    extra_hex = "".join(f"{e:02x}" for e in extra)
+    cover_position = int.from_bytes([status1, status2], byteorder="little", signed=True)
+    rec_log(f"COVER STATUS state={state} cover_position={cover_position} extra={extra_hex}", addr)
+    rec_log(f"    {data_hex}", addr)
+    return {
+        "address": addr,
+        "state": state,
+        "cover_position": cover_position,
+    }
+
+
+def _parse_0x98_light(addr, state, status1, status2, extra, data_hex):
+    """Parse 0x98 message for light/switch devices.
+    
+    Returns dict with dim level.
+    """
+    extra_hex = "".join(f"{e:02x}" for e in extra)
+    dim = status2
+    rec_log(f"DIM/STATE state={state} dim={dim} extra={extra_hex}", addr)
+    rec_log(f"    {data_hex}", addr)
+    return {
+        "address": addr,
+        "state": state,
+        "dim": dim,
+    }
+
+
+def _parse_0x98_unknown(addr, state, status1, status2, extra, data_hex):
+    """Parse 0x98 message for unknown device types.
+    
+    Returns dict with raw status bytes without interpretation.
+    """
+    extra_hex = "".join(f"{e:02x}" for e in extra)
+    status1_status2_value = int.from_bytes([status1, status2], byteorder="little", signed=True)
+    rec_log(f"UNKNOWN DEVICE STATUS state={state} status1={status1} status2={status2} bytes_1_2={status1_status2_value} extra={extra_hex}", addr)
+    rec_log(f"    {data_hex}", addr)
+    return {
+        "address": addr,
+        "state": state,
+        "status1": status1,
+        "status2": status2,
+    }
+
+
+# Dispatch table for 0x98 message handlers
+# Maps device type to appropriate parsing function
+_0X98_HANDLERS = {
+    PlejdDeviceType.CLIMATE: _parse_0x98_climate,
+    PlejdDeviceType.COVER: _parse_0x98_cover,
+    PlejdDeviceType.LIGHT: _parse_0x98_light,
+    PlejdDeviceType.SWITCH: _parse_0x98_light,  # Switch shares handler with Light
+}
+
+# ============================================================================
 
 
 def parse_data(data: bytearray, device_types: dict | None = None):
@@ -73,54 +170,13 @@ def parse_data(data: bytearray, device_types: dict | None = None):
             }
 
         case [addr, 0x01, 0x10, 0x00, 0x98, state, status1, status2, *extra]:
-            # 0x98 is used by multiple device types
-            device_type = (device_types or {}).get(addr, "UNKNOWN")
-            if device_type == "CLIMATE":
-                # Thermostat status response
-                # Format: AA 01 10 00 98 [state] [status1] [status2] [heating]
-                extra_hex = "".join(f"{e:02x}" for e in extra)
-                heating = extra[0] == 0x80 if extra else None
-
-                # Temperature decoding via modulo-64 rule: lower six bits minus 10 degrees offset
-                temp_raw = status2 & THERMOSTAT_TEMP_MASK
-                current_temperature = temp_raw - 10
-                # Mode: off takes precedence when state==0; otherwise derive from heating flag
-                hvac_mode = "off" if not state else ("heating" if heating else "idle")
-
-                temp_str = f"{current_temperature}°C" if current_temperature is not None else "None (invalid)"
-                rec_log(
-                    f"THERMOSTAT STATUS state={state} status1={status1} status2={status2} current={temp_str} mode={hvac_mode} heating={heating}",
-                    addr,
-                )
-                rec_log(f"    {data_hex}", addr)
-                result = {
-                    "address": addr,
-                    "state": state,
-                    "status1": status1,
-                    "status2": status2,
-                    "heating": heating,
-                    "mode": hvac_mode,
-                }
-                if current_temperature is not None:
-                    result["temperature"] = current_temperature
-                rec_log(f"THERMOSTAT STATUS RETURNING: {result}", addr)
-                return result
-            else:
-                # Non-climate: treat as dim/cover style response
-                extra_hex = "".join(f"{e:02x}" for e in extra)
-                dim = status2
-                cover_position = int.from_bytes([status1, status2], byteorder="little", signed=True)
-                rec_log(f"DIM/STATE state={state} dim={dim} cover_position={cover_position} extra={extra_hex}", addr)
-                rec_log(f"    {data_hex}", addr)
-                return {
-                    "address": addr,
-                    "state": state,
-                    "dim": dim,
-                    "cover_position": cover_position,
-                }
+            # 0x98 is used by multiple device types - dispatch to appropriate handler
+            device_type = (device_types or {}).get(addr, PlejdDeviceType.UNKNOWN)
+            handler = _0X98_HANDLERS.get(device_type, _parse_0x98_unknown)
+            return handler(addr, state, status1, status2, extra, data_hex)
 
         # Setpoint readback responses (01 02 pattern - device responds with 01 03!)
-        case [addr, 0x01, 0x03, 0x04, 0x5c, temp_low, temp_high, *extra] if (device_types or {}).get(addr, "CLIMATE") == "CLIMATE":
+        case [addr, 0x01, 0x03, 0x04, 0x5c, temp_low, temp_high, *extra] if (device_types or {}).get(addr, PlejdDeviceType.UNKNOWN) == PlejdDeviceType.CLIMATE:
             # Setpoint readback response - device returns setpoint via read request
             # Format: AA 01 03 04 5c [temp_low] [temp_high]
             # Pattern: We send 01 02 (read request), device responds with 01 03 (read response)
@@ -138,7 +194,7 @@ def parse_data(data: bytearray, device_types: dict | None = None):
             }
         
         # Also handle 01 02 pattern in case device uses it directly (though we saw 01 03)
-        case [addr, 0x01, 0x02, 0x04, 0x5c, temp_low, temp_high, *extra] if (device_types or {}).get(addr, "CLIMATE") == "CLIMATE":
+        case [addr, 0x01, 0x02, 0x04, 0x5c, temp_low, temp_high, *extra] if (device_types or {}).get(addr, PlejdDeviceType.UNKNOWN) == PlejdDeviceType.CLIMATE:
             # Setpoint readback response (alternative format)
             # Format: AA 01 02 04 5c [temp_low] [temp_high]
             setpoint = int.from_bytes([temp_low, temp_high], byteorder="little") / 10.0
@@ -154,7 +210,7 @@ def parse_data(data: bytearray, device_types: dict | None = None):
             }
 
         # Legacy / unsolicited setpoint messages (0x01 0x10 0x04 0x5c)
-        case [addr, 0x01, 0x10, 0x04, 0x5c, temp_low, temp_high, *extra] if (device_types or {}).get(addr, "CLIMATE") == "CLIMATE":
+        case [addr, 0x01, 0x10, 0x04, 0x5c, temp_low, temp_high, *extra] if (device_types or {}).get(addr, PlejdDeviceType.UNKNOWN) == PlejdDeviceType.CLIMATE:
             # Device pushed a setpoint update (can be write ack or manual knob change)
             setpoint = int.from_bytes([temp_low, temp_high], byteorder="little") / 10.0
             msg_type = "write_ack" if extra else "push_5c"
@@ -170,7 +226,7 @@ def parse_data(data: bytearray, device_types: dict | None = None):
             }
 
         # Maximum temperature limit messages (register 0x0460)
-        case [addr, op1, op2, 0x04, 0x60, sub_id, first_low, first_high, second_low, second_high, *extra] if (device_types or {}).get(addr, "CLIMATE") == "CLIMATE":
+        case [addr, op1, op2, 0x04, 0x60, sub_id, first_low, first_high, second_low, second_high, *extra] if (device_types or {}).get(addr, PlejdDeviceType.UNKNOWN) == PlejdDeviceType.CLIMATE:
             # Limit configuration responses (register 0x0460) carry multiple values depending on sub_id
             first_value = int.from_bytes([first_low, first_high], byteorder="little") / 10.0
             second_value = int.from_bytes([second_low, second_high], byteorder="little") / 10.0
