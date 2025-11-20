@@ -160,7 +160,7 @@ The setpoint is encoded as 16-bit **little**-endian integer (value * 10).
 
 Device responds to setpoint read requests with the current setpoint value. This is the response to the `AA 0102 045C` read request (01 02 → 01 03 pattern).
 
-Note: Manual knob changes on the device may also trigger setpoint updates, but these would also use the same 01 03 read response format.
+Note: Manual knob changes on the device also trigger setpoint updates
 
 ### Temperature limits register (0x0460)
 
@@ -200,4 +200,4 @@ Set thermostat mode:
 - Register `0x5F`: Set OFF mode (`mode=0x00` to enable OFF)
 - Register `0x7E`: Set HEAT mode (`mode=0x00` to enable HEAT)
 
-Note: The mode is determined by which register is set to `0x00`. Setting both to non-zero or neither to zero results in an undefined state.
+Note: The mode is determined by which register is set to `0x00`.
