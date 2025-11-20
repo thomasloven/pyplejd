@@ -15,7 +15,7 @@ Contributors not listed in git history - in no particular order:
 
 Much information below is taken from here: https://github.com/icanos/hassio-plejd/issues/163
 
-Other things I have disocvered myself
+Other things I have discovered myself
 
 # BLE characteristic LASTDATA: `31BA0004-6085-4726-BE45-040C957391B5`
 
@@ -50,7 +50,7 @@ Turn on `SS=01` or off `SS=00` light at address `AA`.
 
 ### Dim level `AA 0110 0098 SS DDDD` (R/W)
 
-### `AA 0110 00C8 SS DDDD` (R0)
+### `AA 0110 00C8 SS DDDD` (RO)
 
 Note: `0x98` is also used for cover position and thermostat status - device type determines interpretation.
 
@@ -61,7 +61,7 @@ If turn on, set dim level to `DDDD`.
 `DDDD` is encoded **big**-endian.
 The easiest way to decode this is to ignore the first byte, and only care about the second.
 When sending the command, send the same byte twice. That way you get the dim level in the range 0-255
-instead of 0-65535, which is easieer to handle.
+instead of 0-65535, which is easier to handle.
 
 ### Color temperature `AA 0110 0420 030111 TTTT` (R/W)
 
@@ -79,7 +79,7 @@ I have not discovered the significance of `XX`. When sending the command `03` se
 
 Received when WMS-01 detects motion. Motion events are rate limited to about every 25-35 seconds.
 
-The command is followed by eight bytes of data. I think the last two may be related to light level, but my experiments are inconclusive. The other's may or may not have something to do with battery voltage, maybe...
+The command is followed by eight bytes of data. I think the last two may be related to light level, but my experiments are inconclusive. The others may or may not have something to do with battery voltage, maybe...
 
 ## Buttons
 
@@ -93,7 +93,7 @@ If `XX` is included, `XX=01` indicates the button was pressed and `XX=00` indica
 Sending this command will cause ALL buttons to send the Button Pressed command when pressed.
 Otherwise only battery powered buttons (WPH-01) will do so.
 
-This is what the Plejd app uses to identify a button when programming it. As far as I can tell, thi not affects does the normal operation of the buttons.
+This is what the Plejd app uses to identify a button when programming it. As far as I can tell, this does not affect the normal operation of the buttons.
 
 ## Coverables
 
@@ -144,7 +144,7 @@ The current temperature is decoded from `status2` using: `temperature = (status2
 
 ### Setpoint register (0x5c)
 
-#### Write setpoint `AA 0110 045C [temp_low] [temp_high]` (R/W)
+#### Write setpoint `AA 0110 045C [temp_low] [temp_high]` (WO)
 
 Set the temperature setpoint. Temperature is encoded as 16-bit **little**-endian integer (value * 10), so `0x0A01` = 26.6°C, `0x0E01` = 30.0°C.
 
@@ -156,9 +156,11 @@ Read the current setpoint using the 01 02 read pattern:
 
 The setpoint is encoded as 16-bit **little**-endian integer (value * 10).
 
-#### Setpoint push/ack `AA 0110 045C [temp_low] [temp_high] [extra]` (RO)
+#### Setpoint read response `AA 0103 045C [temp_low] [temp_high]` (RO)
 
-Device may push setpoint updates (write acknowledgment or manual knob changes). If `[extra]` bytes are present, it's a write acknowledgment; otherwise it's an unsolicited push.
+Device responds to setpoint read requests with the current setpoint value. This is the response to the `AA 0102 045C` read request (01 02 → 01 03 pattern).
+
+Note: Manual knob changes on the device may also trigger setpoint updates, but these would also use the same 01 03 read response format.
 
 ### Temperature limits register (0x0460)
 
