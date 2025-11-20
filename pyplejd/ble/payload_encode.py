@@ -1,6 +1,7 @@
 from __future__ import annotations
 import binascii
 from datetime import datetime, timedelta
+import math
 import time
 
 import typing
@@ -93,8 +94,8 @@ def set_state(mesh: PlejdMesh, address, **state):
         # Setpoint temperature command
         # AA 0110 045c TTTT
         # Temperature encoded as 16-bit little-endian integer (value * 10)
-        # Round to nearest degree to avoid encoding issues
-        setpoint_rounded = round(setpoint)  # Round to nearest degree
+        # Round up to nearest degree (devices don't support fractional degrees)
+        setpoint_rounded = math.ceil(setpoint)
         temp_value = int(setpoint_rounded * 10)
         temp_bytes = temp_value.to_bytes(2, "little")
         payloads.append(f"{address:02x} 0110 045c {temp_bytes.hex()}")
