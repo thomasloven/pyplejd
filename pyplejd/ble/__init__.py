@@ -13,11 +13,14 @@ from .crypto import auth_response, encrypt_decrypt
 from . import ble_characteristics as gatt
 from . import payload_encode
 from .parse_data import parse_data
-from .parse_lightlevel import parse_lightlevel
+from .parse_poll import parse_poll
 from .ble_characteristics import PLEJD_SERVICE
 
 _LOGGER = logging.getLogger(__name__)
 _CONNECTION_LOG = logging.getLogger("pyplejd.ble.connection")
+
+# BLE communication timing constants
+READ_RESPONSE_DELAY = 0.2  # Seconds to wait after read request for device response
 
 
 class PlejdMesh:
@@ -32,6 +35,7 @@ class PlejdMesh:
 
         self._connect_listeners = set()
         self._state_listeners = set()
+        self._device_types = {}
 
         self._ble_lock = asyncio.Lock()
 
@@ -54,6 +58,11 @@ class PlejdMesh:
 
     def set_key(self, key: str):
         self._crypto_key = key
+
+    def set_device_types(self, device_types: dict):
+        """Store device type mapping for proper poll response parsing."""
+        self._device_types = device_types
+        _LOGGER.debug(f"PlejdMesh received device types: {device_types}")
 
     def _subscribe(self, set_: set, listener: Callable):
         set_.add(listener)
@@ -79,7 +88,7 @@ class PlejdMesh:
             return False
         try:
             await self._client.stop_notify(gatt.PLEJD_LASTDATA)
-            await self._client.stop_notify(gatt.PLEJD_LIGHTLEVEL)
+            await self._client.stop_notify(gatt.PLEJD_POLL)
             await self._client.disconnect()
         except BleakError:
             pass
@@ -149,19 +158,18 @@ class PlejdMesh:
         async def _lastdata_listener(_, lastdata: bytearray):
 
             data = encrypt_decrypt(self._crypto_key, self._gateway_node, lastdata)
-            retval = parse_data(data)
+            retval = parse_data(data, self._device_types)
+            if retval is not None:
+                self._publish(self._state_listeners, retval)
+                if "button" in retval:
+                    await self.poll_buttons()
 
-            self._publish(self._state_listeners, retval)
-
-            if "button" in retval:
-                await self.poll_buttons()
-
-        async def _lightlevel_listener(_, lightlevel: bytearray):
-            for state in parse_lightlevel(lightlevel):
+        async def _poll_listener(_, poll_response: bytearray):
+            for state in parse_poll(poll_response, self._device_types):
                 self._publish(self._state_listeners, state)
 
         await client.start_notify(gatt.PLEJD_LASTDATA, _lastdata_listener)
-        await client.start_notify(gatt.PLEJD_LIGHTLEVEL, _lightlevel_listener)
+        await client.start_notify(gatt.PLEJD_POLL, _poll_listener)
         self._client = client
 
         self._publish(self._connect_listeners, {"connected": True})
@@ -173,7 +181,7 @@ class PlejdMesh:
         if client is None:
             return
         _LOGGER.debug("Polling mesh for current state")
-        await client.write_gatt_char(gatt.PLEJD_LIGHTLEVEL, b"\x01", response=True)
+        await client.write_gatt_char(gatt.PLEJD_POLL, b"\x01", response=True)
 
     async def poll_buttons(self):
         await self._write(payload_encode.request_button(self))
@@ -190,7 +198,7 @@ class PlejdMesh:
         return retval
 
     async def set_state(self, address: int, **state):
-        payloads = payload_encode.set_state(self, address, **state)
+        payloads, _ = payload_encode.set_state(self, address, **state)
         await self._write(payloads)
 
     async def activate_scene(self, index: int):
@@ -249,6 +257,53 @@ class PlejdMesh:
         except (BleakError, asyncio.TimeoutError) as e:
             _LOGGER.warning("Plejd mesh keepalive signal failed: %s", str(e))
         return False
+
+    async def read_register(self, address: int, register: str, sub_ids: list[int] | None = None, operation_name: str = "read"):
+        """Send register read requests via BLE.
+        
+        Args:
+            address: Device address to read from
+            register: Register address in hex format (e.g., "045c" or "0460")
+            sub_ids: Optional list of sub-IDs to read (for registers that support sub-IDs)
+            operation_name: Human-readable name for logging (e.g., "setpoint read", "thermostat limits")
+        
+        Returns:
+            None - Responses come via notification (_lastdata_listener)
+        """
+        client = self._client
+        if client is None:
+            _LOGGER.warning(f"Cannot {operation_name}: not connected")
+            return None
+        
+        try:
+            async with self._ble_lock:
+                # Build read commands
+                if sub_ids:
+                    # Multiple commands for registers with sub-IDs
+                    read_cmds = [f"{address:02x} 0102 {register} {sub_id:02x}" for sub_id in sub_ids]
+                else:
+                    # Single command for simple register reads
+                    read_cmds = [f"{address:02x} 0102 {register}"]
+                
+                # Encode and send all commands
+                payloads = payload_encode.encode(self, read_cmds)
+                for payload in payloads:
+                    await client.write_gatt_char(gatt.PLEJD_DATA, payload, response=True)
+                
+                # Log the operation
+                if sub_ids:
+                    sub_ids_str = "/".join(f"{sid:02x}" for sid in sub_ids)
+                    _LOGGER.debug(f"Requested {operation_name} for device {address} (sub_ids {sub_ids_str})")
+                else:
+                    _LOGGER.debug(f"Requested {operation_name} for device {address} using 01 02 pattern, waiting for notification...")
+                
+                await asyncio.sleep(READ_RESPONSE_DELAY)  # Give device time to respond
+                return None  # Response comes via notification, not direct return
+                    
+        except (BleakError, asyncio.TimeoutError) as e:
+            _LOGGER.warning(f"Failed to request {operation_name} for device {address}: {e}")
+            return None
+
 
     async def _authenticate(self, client: BleakClient):
         if client is None:

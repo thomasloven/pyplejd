@@ -80,6 +80,21 @@ class PlejdManager:
             LOGGER.debug(scn)
             self.devices.append(scn)
 
+        # Build device type mapping for OUTPUT devices only (by BLE address)
+        # Poll responses come from output devices (lights, dimmers, climate, covers), not input devices (buttons)
+        device_types = {}
+        for dev in self.devices:
+            # Only include output devices (lights, dimmers, climate, covers, relays)
+            # Exclude input devices (buttons, motion sensors) and scenes
+            if hasattr(dev, 'address') and hasattr(dev, 'outputType'):
+                # Only map if it's an actual output device type (not BUTTON/SENSOR)
+                if dev.outputType in (dt.PlejdDeviceType.LIGHT, dt.PlejdDeviceType.SWITCH, 
+                                     dt.PlejdDeviceType.CLIMATE, dt.PlejdDeviceType.COVER):
+                    device_types[dev.address] = dev.outputType
+        
+        LOGGER.debug(f"Device type mapping: {device_types}")
+        self.mesh.set_device_types(device_types)
+
     def add_mesh_device(self, device, rssi) -> bool:
         return self.mesh.see_device(device, rssi)
 

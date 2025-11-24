@@ -24,6 +24,7 @@ class PlejdDeviceType(StrEnum):
     BUTTON = "SENSOR"
     MOTION = "MOTION"
     COVER = "COVERABLE"
+    CLIMATE = "CLIMATE"
     SCENE = "SCENE"
     UNKNOWN = "UNKNOWN"
 

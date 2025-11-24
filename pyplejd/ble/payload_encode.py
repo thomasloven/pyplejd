@@ -1,6 +1,7 @@
 from __future__ import annotations
 import binascii
 from datetime import datetime, timedelta
+import math
 import time
 
 import typing
@@ -67,7 +68,43 @@ def set_state(mesh: PlejdMesh, address, **state):
             payloads.append(f"{address:02x} 0110 0420 030827 01 {cover:04x}")
             send_log(f"COVER POSITION command {hex_payload(payloads[-1])}", address)
 
-    return encode(mesh, payloads)
+    if (thermostat_mode := state.get("thermostat_mode", None)) is not None:
+        # Thermostat mode command (confirmed from Plejd app behavior)
+        # OFF uses register 0x5f: AA 0110 045f 00
+        # ON uses register 0x7e: AA 0110 047e 00
+        
+        if isinstance(thermostat_mode, str):
+            mode_lower = thermostat_mode.lower()
+            if mode_lower in ("off", "standby", "0"):
+                payload = f"{address:02x} 0110 045f 00"
+            else:
+                # Turn ON (heat mode) - register 0x7e
+                payload = f"{address:02x} 0110 047e 00"
+        else:
+            # Boolean: True = ON, False = OFF
+            payload = f"{address:02x} 0110 047e 00" if thermostat_mode else f"{address:02x} 0110 045f 00"
+
+        payloads.append(payload)
+        send_log(
+            f"THERMOSTAT MODE command {hex_payload(payload)} mode={thermostat_mode}",
+            address,
+        )
+
+    if (setpoint := state.get("setpoint", None)) is not None:
+        # Setpoint temperature command
+        # AA 0110 045c TTTT
+        # Temperature encoded as 16-bit little-endian integer (value * 10)
+        # Round up to nearest degree (devices don't support fractional degrees)
+        setpoint_rounded = math.ceil(setpoint)
+        temp_value = int(setpoint_rounded * 10)
+        temp_bytes = temp_value.to_bytes(2, "little")
+        payloads.append(f"{address:02x} 0110 045c {temp_bytes.hex()}")
+        send_log(f"SETPOINT command {hex_payload(payloads[-1])} ({setpoint_rounded}°C)", address)
+
+    encoded = encode(mesh, payloads)
+    
+    # Return encoded payloads (device will confirm via write_ack or push_5c notifications)
+    return encoded, {}
 
 
 def trigger_scene(mesh: PlejdMesh, index):
