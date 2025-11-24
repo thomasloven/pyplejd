@@ -239,21 +239,21 @@ def parse_data(data: bytearray, device_types: dict | None = None):
             }
 
             if sub_id == 0x00:
-                result["floor_min_temperature"] = first_value
+                result["room_min_temperature"] = first_value
                 result["floor_max_temperature"] = second_value
                 rec_log(
-                    f"THERMOSTAT LIMITS (sub=0x00 floor) floor_min={first_value}°C floor_max={second_value}°C",
+                    f"THERMOSTAT LIMITS (sub=0x00) room_min={first_value}°C floor_max={second_value}°C",
                     addr,
                 )
             elif sub_id in (0x01, 0x02):
-                result["floor_min_temperature"] = first_value
+                result["room_min_temperature"] = first_value
                 result["room_max_temperature"] = second_value
                 rec_log(
-                    f"THERMOSTAT LIMITS (sub=0x{sub_id:02x} room) floor_min={first_value}°C room_max={second_value}°C",
+                    f"THERMOSTAT LIMITS (sub=0x{sub_id:02x}) room_min={first_value}°C room_max={second_value}°C",
                     addr,
                 )
             else:
-                result["floor_min_temperature"] = first_value
+                result["room_min_temperature"] = first_value
                 result["limit_extra_value"] = second_value
                 rec_log(
                     f"THERMOSTAT LIMITS (sub=0x{sub_id:02x}) first={first_value} second={second_value}",

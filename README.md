@@ -171,8 +171,8 @@ Read thermostat temperature limits using the 01 02 read pattern with different s
 - Receive: `AA 0103 0460 [sub_id] [first_low] [first_high] [second_low] [second_high]` (read response)
 
 Response format depends on `sub_id`:
-- `sub_id = 0x00`: `first` = floor_min_temperature, `second` = floor_max_temperature
-- `sub_id = 0x01` or `0x02`: `first` = floor_min_temperature, `second` = room_max_temperature
+- `sub_id = 0x00`: `first` = room_min_temperature (minimum setpoint), `second` = floor_max_temperature
+- `sub_id = 0x01` or `0x02`: `first` = room_min_temperature (minimum setpoint), `second` = room_max_temperature
 
 All temperatures are encoded as 16-bit **little**-endian integers (value * 10).
 

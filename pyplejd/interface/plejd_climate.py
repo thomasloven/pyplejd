@@ -19,12 +19,12 @@ STATE_KEY_TEMPERATURE = "temperature"
 STATE_KEY_CURRENT_TEMPERATURE = "current_temperature"
 STATE_KEY_MODE = "mode"
 STATE_KEY_HEATING = "heating"
-STATE_KEY_FLOOR_MIN_TEMPERATURE = "floor_min_temperature"
+STATE_KEY_ROOM_MIN_TEMPERATURE = "room_min_temperature"
 STATE_KEY_FLOOR_MAX_TEMPERATURE = "floor_max_temperature"
 STATE_KEY_ROOM_MAX_TEMPERATURE = "room_max_temperature"
 STATE_KEY_AVAILABLE = "available"
 STATE_KEY_MSG_TYPE = "msg_type"
-STATE_KEY_FLOOR_MIN_TEMP = "floor_min_temp"
+STATE_KEY_ROOM_MIN_TEMP = "room_min_temp"
 STATE_KEY_FLOOR_MAX_TEMP = "floor_max_temp"
 STATE_KEY_ROOM_MAX_TEMP = "room_max_temp"
 
@@ -62,7 +62,7 @@ class PlejdClimate(PlejdOutput):
         self.outputType = PlejdDeviceType.CLIMATE
         self._setpoint_read_task = None
         self._max_temp_read_task = None
-        self._floor_min_temp = None
+        self._room_min_temp = None
         self._floor_max_temp = None
         self._room_max_temp = None
         self._was_available = False  # Track previous availability state to detect transitions
@@ -78,7 +78,7 @@ class PlejdClimate(PlejdOutput):
             STATE_KEY_TEMPERATURE,
             STATE_KEY_SETPOINT,
             STATE_KEY_HEATING,
-            STATE_KEY_FLOOR_MIN_TEMPERATURE,
+            STATE_KEY_ROOM_MIN_TEMPERATURE,
             STATE_KEY_FLOOR_MAX_TEMPERATURE,
             STATE_KEY_ROOM_MAX_TEMPERATURE,
         }
@@ -179,9 +179,9 @@ class PlejdClimate(PlejdOutput):
                 _LOGGER.debug(f"PlejdClimate: Received 0x98 status after setpoint write ({time_since_write:.2f}s ago), scheduling setpoint read")
                 self._maybe_schedule_setpoint_read(TRIGGER_AFTER_WRITE)
 
-        if STATE_KEY_FLOOR_MIN_TEMPERATURE in state:
-            self._floor_min_temp = state[STATE_KEY_FLOOR_MIN_TEMPERATURE]
-            state[STATE_KEY_FLOOR_MIN_TEMP] = self._floor_min_temp
+        if STATE_KEY_ROOM_MIN_TEMPERATURE in state:
+            self._room_min_temp = state[STATE_KEY_ROOM_MIN_TEMPERATURE]
+            state[STATE_KEY_ROOM_MIN_TEMP] = self._room_min_temp
         if STATE_KEY_FLOOR_MAX_TEMPERATURE in state:
             self._floor_max_temp = state[STATE_KEY_FLOOR_MAX_TEMPERATURE]
             state[STATE_KEY_FLOOR_MAX_TEMP] = self._floor_max_temp
@@ -226,7 +226,7 @@ class PlejdClimate(PlejdOutput):
         
         Returns:
             dict: Parsed state with standardized keys (available, mode, current_temperature,
-                  setpoint, max_temp, floor_min_temp, floor_max_temp, room_max_temp)
+                  setpoint, max_temp, room_min_temp, floor_max_temp, room_max_temp)
         """
         available = state.get(STATE_KEY_AVAILABLE, False)
                 
@@ -243,8 +243,8 @@ class PlejdClimate(PlejdOutput):
         if STATE_KEY_SETPOINT in state:
             parsed[STATE_KEY_SETPOINT] = state[STATE_KEY_SETPOINT]
 
-        if self._floor_min_temp is not None:
-            parsed[STATE_KEY_FLOOR_MIN_TEMP] = self._floor_min_temp
+        if self._room_min_temp is not None:
+            parsed[STATE_KEY_ROOM_MIN_TEMP] = self._room_min_temp
         if self._floor_max_temp is not None:
             parsed[STATE_KEY_FLOOR_MAX_TEMP] = self._floor_max_temp
         if self._room_max_temp is not None:
@@ -334,13 +334,9 @@ class PlejdClimate(PlejdOutput):
         """Schedule a limit read task if not already in progress and limits are missing.
         
         Reads thermostat temperature limits from the device using register 0x0460.
-        Currently reads sub_id 0x00 which provides:
-        - floor_min_temperature: Minimum allowed floor temperature
-        - floor_max_temperature: Maximum allowed floor temperature
-        
-        Note: The device also supports sub_ids 0x01 and 0x02 which provide
-        floor_min_temperature and room_max_temperature, but these are not
-        currently being read.
+        Reads multiple sub_ids:
+        - sub_id 0x00: room_min_temperature (minimum setpoint) + floor_max_temperature
+        - sub_id 0x01: room_min_temperature (minimum setpoint) + room_max_temperature
         
         Only schedules if limits are not already known.
         """
@@ -364,7 +360,7 @@ class PlejdClimate(PlejdOutput):
                 await self._mesh.read_register(
                     self.address, 
                     "0460", 
-                    sub_ids=[0x00],  # Only read floor limits for now
+                    sub_ids=[0x00, 0x01],  # Read floor limits (0x00) and room max (0x01)
                     operation_name="thermostat limits"
                 )
             except asyncio.CancelledError:
@@ -381,11 +377,11 @@ class PlejdClimate(PlejdOutput):
         """Check if all required thermostat temperature limits have been received.
         
         Returns:
-            bool: True if all limits (floor_min_temp, floor_max_temp, 
+            bool: True if all limits (room_min_temp, floor_max_temp, 
                   room_max_temp) are known, False otherwise
         """
         return (
-            self._floor_min_temp is not None
+            self._room_min_temp is not None
             and self._floor_max_temp is not None
             and self._room_max_temp is not None
         )
