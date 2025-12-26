@@ -174,8 +174,7 @@ class PlejdCloudSite:
 
                 room = details.find_room(device.roomId)
 
-                rxAddress = details.rxAddress.get(
-                    deviceId, {}).get(str(output), -1)
+                rxAddress = details.rxAddress.get(deviceId, {}).get(str(output), -1)
 
                 yield {
                     "address": address,

@@ -114,7 +114,7 @@ I've given up on reliably decoding this for the time being...
 
 It also seems that holding the buttons for a longer time sends different commands...
 
-### Set cover position `AA 0110 0420 030807 01 PPPP` (WO)
+### Set cover position `AA 0110 0420 0308 0701 PPPP` (WO)
 
 Set cover at address `AA` to position `PPPP`.
 

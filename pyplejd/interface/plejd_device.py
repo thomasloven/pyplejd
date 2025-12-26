@@ -1,6 +1,8 @@
 from __future__ import annotations
 from enum import IntFlag, StrEnum
 from ..cloud import site_details as sd
+from ..ble.lastdata import LastData
+from ..ble.lightlevel import LightLevel
 
 from typing import TYPE_CHECKING
 
@@ -59,6 +61,9 @@ class PlejdDevice:
         self.identifier = None
         self.device_identifier = (plejdDevice.deviceId, device.objectId)
         self.capabilities = PlejdTraits(self.deviceData.traits)
+        self.ble_mac = ":".join(
+            device.deviceId[i : i + 2] for i in range(0, len(device.deviceId), 2)
+        )
 
     def __repr__(self):
         return f"<{self.__class__.__name__} {self.BLEaddress} ({self.address}) {self.name} [{self.hardware}] {self.outputType}-{self.capabilities!r}>"
@@ -77,14 +82,16 @@ class PlejdDevice:
 
         return remover
 
-    def parse_state(self, update, state):
-        return state
+    async def parse_lightlevel(self, data: LightLevel):
+        pass
 
-    def update_state(self, **state):
-        self._state.update(state)
-        state = self.parse_state(state, self._state)
+    async def parse_lastdata(self, data: LastData):
+        pass
+
+    def set_available(self, available=False):
+        self._state["available"] = available
         for listener in self._listeners:
-            listener(state)
+            listener(self._state)
 
     @property
     def BLEaddress(self):

@@ -1,11 +1,11 @@
 from __future__ import annotations
 import logging
 from datetime import timedelta
-from typing import TypedDict
 
 from bleak_retry_connector import close_stale_connections
 
-from .ble import PlejdMesh, PLEJD_SERVICE
+from .ble import PlejdMesh, PLEJD_SERVICE, LastData, LightLevel
+from .ble.debug import rec_log
 from .cloud import PlejdCloudSite
 
 from .errors import AuthenticationError, ConnectionError
@@ -33,6 +33,8 @@ dt = DeviceTypes
 get_sites = PlejdCloudSite.get_sites
 verify_credentials = PlejdCloudSite.verify_credentials
 
+blacklist = []  # TODO: MAKE WORK
+
 
 class PlejdManager:
     def __init__(self, username: str, password: str, siteId: str):
@@ -47,13 +49,31 @@ class PlejdManager:
         self.cloud = PlejdCloudSite(**self.credentials)
         self.options = {}
 
+    def connect_callback(self, connected: bool):
+        for d in self.devices:
+            d.set_available(connected)
+
+    async def lightlevel_callback(self, lightlevels: list[LightLevel]):
+        for ll in lightlevels:
+            for d in self.devices:
+                if ll.address in [d.address, d.rxAddress]:
+                    await d.parse_lightlevel(ll)
+
+    async def lastdata_callback(self, data: LastData):
+        found = False
+        for d in self.devices:
+            if data.address in [d.address, d.rxAddress, 0]:
+                found = True
+                await d.parse_lastdata(data)
+
+        if not found:
+            rec_log(f"Unknown command received: {data.command}")
+            rec_log(f"    {data.hex}")
+
     async def init(self, sitedata=None):
         await self.cloud.load_site_details(sitedata)
 
         self.mesh.set_key(self.cloud.cryptokey)
-
-        self.mesh.subscribe_connect(self._update_connected)
-        self.mesh.subscribe_state(self._update_device)
 
         LOGGER = logging.getLogger("pyplejd.device_list")
 
@@ -63,7 +83,8 @@ class PlejdManager:
             dev = cls(**device, mesh=self.mesh)
             LOGGER.debug(dev)
             self.devices.append(dev)
-            self.mesh.expect_device(dev.BLEaddress, dev.powered)
+            if dev.BLEaddress not in blacklist:
+                self.mesh.expect_device(dev.BLEaddress, dev.powered)
 
         LOGGER.debug("Input Devices:")
         for device in self.cloud.inputs:
@@ -71,7 +92,8 @@ class PlejdManager:
             dev = cls(**device, mesh=self.mesh)
             LOGGER.debug(dev)
             self.devices.append(dev)
-            self.mesh.expect_device(dev.BLEaddress, dev.powered)
+            if dev.BLEaddress not in blacklist:
+                self.mesh.expect_device(dev.BLEaddress, dev.powered)
 
         LOGGER.debug("Scenes:")
         for scene in self.cloud.scenes:
@@ -96,15 +118,6 @@ class PlejdManager:
 
     async def get_raw_sitedata(self):
         return await self.cloud.get_raw_details()
-
-    def _update_connected(self, state):
-        for d in self.devices:
-            d.update_state(available=state["connected"])
-
-    def _update_device(self, state):
-        for d in self.devices:
-            if d.match_state(state):
-                d.update_state(**state)
 
     @property
     def ping_interval(self):

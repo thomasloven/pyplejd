@@ -70,12 +70,12 @@ def set_state(mesh: PlejdMesh, address, **state):
     return encode(mesh, payloads)
 
 
-def trigger_scene(mesh: PlejdMesh, index):
-    # Scene trigger command
-    # 02 0110 0021 II
-    payload = f"02 0110 0021 {index:02x}"
-    send_log(f"SCENE command {hex_payload(payload)}", "SCN")
-    return encode(mesh, [payload])
+# def trigger_scene(mesh: PlejdMesh, index):
+#     # Scene trigger command
+#     # 02 0110 0021 II
+#     payload = f"02 0110 0021 {index:02x}"
+#     send_log(f"SCENE command {hex_payload(payload)}", "SCN")
+#     return encode(mesh, [payload])
 
 
 def set_time(mesh: PlejdMesh):
@@ -103,10 +103,10 @@ def request_time(mesh: PlejdMesh, address):
     return encode(mesh, [payload])
 
 
-def request_button(mesh: PlejdMesh):
-    # Request button identification
-    # 00 0110 0015
+# def request_button(mesh: PlejdMesh):
+#     # Request button identification
+#     # 00 0110 0015
 
-    payload = f"00 0110 0015"
-    send_log(f"IDENTIFY BUTTON REQUEST {hex_payload(payload)}")
-    return encode(mesh, [payload])
+#     payload = f"00 0110 0015"
+#     send_log(f"IDENTIFY BUTTON REQUEST {hex_payload(payload)}")
+#     return encode(mesh, [payload])

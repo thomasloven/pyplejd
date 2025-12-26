@@ -1,4 +1,5 @@
 import asyncio
+import binascii
 import logging
 import os
 from datetime import datetime, timedelta
@@ -12,9 +13,10 @@ from bleak_retry_connector import establish_connection
 from .crypto import auth_response, encrypt_decrypt
 from . import ble_characteristics as gatt
 from . import payload_encode
-from .parse_data import parse_data
-from .parse_lightlevel import parse_lightlevel
+from .lastdata import LastData, MiniPkg
+from .lightlevel import parse_lightlevels, LightLevel
 from .ble_characteristics import PLEJD_SERVICE
+from .debug import rec_log
 
 _LOGGER = logging.getLogger(__name__)
 _CONNECTION_LOG = logging.getLogger("pyplejd.ble.connection")
@@ -29,9 +31,6 @@ class PlejdMesh:
         self._gateway_node = None
         self._crypto_key: bytearray = None
         self._client: BleakClient = None
-
-        self._connect_listeners = set()
-        self._state_listeners = set()
 
         self._ble_lock = asyncio.Lock()
 
@@ -55,25 +54,6 @@ class PlejdMesh:
     def set_key(self, key: str):
         self._crypto_key = key
 
-    def _subscribe(self, set_: set, listener: Callable):
-        set_.add(listener)
-
-        def remover():
-            if listener in set_:
-                set_.remove(listener)
-
-        return remover
-
-    def _publish(self, set_: set, *args, **kwargs):
-        for listener in set_:
-            listener(*args, **kwargs)
-
-    def subscribe_connect(self, listener: Callable):
-        return self._subscribe(self._connect_listeners, listener)
-
-    def subscribe_state(self, listener: Callable):
-        return self._subscribe(self._state_listeners, listener)
-
     async def disconnect(self):
         if not self._client:
             return False
@@ -84,7 +64,7 @@ class PlejdMesh:
         except BleakError:
             pass
         self._client = None
-        self._publish(self._connect_listeners, {"connected": False})
+        self.manager.connect_callback(False)
 
     async def connect(self):
         if self.connected:
@@ -95,7 +75,7 @@ class PlejdMesh:
             _CONNECTION_LOG.debug("Disconected from BLE mesh (%s)", reason)
             self._client = None
             self._gateway_node = None
-            self._publish(self._connect_listeners, {"connected": False})
+            self.manager.connect_callback(False)
 
         # Try to connect to nodes in order of decreasing RSSI
         filtered_nodes = dict(
@@ -128,7 +108,11 @@ class PlejdMesh:
             try:
                 _CONNECTION_LOG.debug("Attempting to connect to %s", node)
                 client = await establish_connection(
-                    BleakClient, node, "plejd", _disconnect
+                    BleakClient,
+                    node,
+                    "plejd",
+                    _disconnect,
+                    max_attempts=1,
                 )
 
                 if not await self._authenticate(client):
@@ -146,25 +130,27 @@ class PlejdMesh:
             )
             return False
 
-        async def _lastdata_listener(_, lastdata: bytearray):
+        async def _lastdata_listener(_arg, lastdata: bytearray):
 
             data = encrypt_decrypt(self._crypto_key, self._gateway_node, lastdata)
-            retval = parse_data(data)
 
-            self._publish(self._state_listeners, retval)
+            ld = LastData(data)
+            rec_log(f"lastdata {ld}")
+            await self.manager.lastdata_callback(ld)
 
-            if "button" in retval:
+            if ld.command == LastData.CMD_EVENT_FIRED:
                 await self.poll_buttons()
 
         async def _lightlevel_listener(_, lightlevel: bytearray):
-            for state in parse_lightlevel(lightlevel):
-                self._publish(self._state_listeners, state)
+            rec_log(f"lightlevel {lightlevel}")
+            await self.manager.lightlevel_callback(parse_lightlevels(lightlevel))
 
         await client.start_notify(gatt.PLEJD_LASTDATA, _lastdata_listener)
         await client.start_notify(gatt.PLEJD_LIGHTLEVEL, _lightlevel_listener)
         self._client = client
 
-        self._publish(self._connect_listeners, {"connected": True})
+        self.manager.connect_callback(True)
+
         await self.poll()
         return True
 
@@ -176,7 +162,7 @@ class PlejdMesh:
         await client.write_gatt_char(gatt.PLEJD_LIGHTLEVEL, b"\x01", response=True)
 
     async def poll_buttons(self):
-        await self._write(payload_encode.request_button(self))
+        await self.write(LastData(command=LastData.CMD_EVENT_PREPARE).hex)
 
     async def ping(self):
         async with self._ble_lock:
@@ -188,14 +174,6 @@ class PlejdMesh:
         if retval:
             await self.poll_buttons()
         return retval
-
-    async def set_state(self, address: int, **state):
-        payloads = payload_encode.set_state(self, address, **state)
-        await self._write(payloads)
-
-    async def activate_scene(self, index: int):
-        payloads = payload_encode.trigger_scene(self, index)
-        return await self._write(payloads)
 
     async def poll_time(self, address: int):
         client = self._client
@@ -218,6 +196,18 @@ class PlejdMesh:
     async def broadcast_time(self):
         payloads = payload_encode.set_time(self)
         await self._write(payloads)
+
+    async def write(self, *payloads: list[str]):
+        pl = [
+            encrypt_decrypt(
+                self._crypto_key,
+                self._gateway_node,
+                binascii.a2b_hex(payload.replace(" ", "")),
+            )
+            for payload in payloads
+        ]
+        _LOGGER.debug(f"Write: {payloads}")
+        await self._write(pl)
 
     async def _write(self, payloads):
         client = self._client
