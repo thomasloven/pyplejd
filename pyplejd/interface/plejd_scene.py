@@ -33,6 +33,8 @@ class PlejdScene:
         self.identifier = self.scene.sceneId
         self.address = 2
         self.rxAddress = -1
+        self.hw = None
+        self.is_primary = False
 
     def __repr__(self):
         return f"<{self.__class__.__name__} ({self.index}) {self.name}>"

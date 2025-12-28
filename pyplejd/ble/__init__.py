@@ -22,12 +22,37 @@ _LOGGER = logging.getLogger(__name__)
 _CONNECTION_LOG = logging.getLogger("pyplejd.ble.connection")
 
 
+class MeshDevice:
+    BLEaddress: str
+    connectable: bool
+    last_seen: datetime = None
+    rssi: int = None
+    bleDevice: BLEDevice = None
+    is_gateway: bool = False
+
+    def see(self, rssi, bleDevice: BLEDevice) -> bool:
+        # Returns true if first seen
+        if (first_seen := self.rssi) is None:
+            self.bleDevice = bleDevice
+            self.rssi = rssi
+
+        self.last_seen = datetime.now()
+        self.rssi = max(self.rssi, rssi)
+
+        return first_seen
+
+    def update():
+        pass
+
+
+def normalize_address(addr: str) -> str:
+    return addr.replace(":", "").upper()
+
+
 class PlejdMesh:
     def __init__(self, manager):
         self.manager = manager
-        self._seen_nodes: dict[BLEDevice, int] = {}
-        self._expected_nodes = set()
-        self._connectable_nodes = set()
+        self._mesh_devices: dict[str, MeshDevice] = {}
         self._gateway_node = None
         self._crypto_key: bytearray = None
         self._client: BleakClient = None
@@ -38,18 +63,15 @@ class PlejdMesh:
     def connected(self):
         return self._client is not None
 
-    def expect_device(self, BLEaddress: str, connectable=True):
-        self._expected_nodes.add(BLEaddress.replace(":", "").upper())
-        if connectable:
-            self._connectable_nodes.add(BLEaddress.replace(":", "").upper())
+    def expect_device(self, node: MeshDevice = None):
+        self._mesh_devices[node.BLEaddress] = node
 
     def see_device(self, node: BLEDevice, rssi: int) -> bool:
-        _CONNECTION_LOG.debug(
-            f"Saw device {node} (rssi: {rssi}, prev: {self._seen_nodes.get(node, -1e6)})"
-        )
-        new_device = node not in self._seen_nodes
-        self._seen_nodes[node] = max(rssi, self._seen_nodes.get(node, -1e6))
-        return new_device
+        _CONNECTION_LOG.debug(f"Saw device {node} (rssi: {rssi})")
+        addr = normalize_address(node.address)
+        if hw := self._mesh_devices.get(addr):
+            return hw.see(rssi, node)
+        return False
 
     def set_key(self, key: str):
         self._crypto_key = key
@@ -74,34 +96,32 @@ class PlejdMesh:
         def _disconnect(reason):
             _CONNECTION_LOG.debug("Disconected from BLE mesh (%s)", reason)
             self._client = None
-            self._gateway_node = None
+            if self._gateway_node:
+                self._gateway_node.is_gateway = False
+                self._gateway_node.update()
+                self._gateway_node = None
             self.manager.connect_callback(False)
 
         # Try to connect to nodes in order of decreasing RSSI
-        filtered_nodes = dict(
-            filter(
-                lambda n: n[0].address.replace(":", "").upper()
-                in self._connectable_nodes,
-                self._seen_nodes.items(),
-            )
+        filtered_nodes = filter(
+            lambda n: n.connectable and n.rssi is not None,
+            self._mesh_devices.values(),
         )
-        sorted_nodes = dict(
-            sorted(filtered_nodes.items(), key=lambda n: n[1], reverse=True)
-        )
+        sorted_nodes = sorted(filtered_nodes, key=lambda n: n.rssi, reverse=True)
 
-        _CONNECTION_LOG.debug(f"Expected nodes: {self._expected_nodes}")
-        _CONNECTION_LOG.debug(f"Connectable expected nodes: {self._connectable_nodes}")
+        # _CONNECTION_LOG.debug(f"Expected nodes: {self._expected_nodes}")
+        # _CONNECTION_LOG.debug(f"Connectable expected nodes: {self._connectable_nodes}")
 
-        _CONNECTION_LOG.debug(f"Seen nodes: {self._seen_nodes}")
-        _CONNECTION_LOG.debug(f"Connectable, seen nodes: {filtered_nodes}")
-        _CONNECTION_LOG.debug(f"Sorted by signal strength: {sorted_nodes}")
+        # _CONNECTION_LOG.debug(f"Seen nodes: {self._seen_nodes}")
+        # _CONNECTION_LOG.debug(f"Connectable, seen nodes: {filtered_nodes}")
+        # _CONNECTION_LOG.debug(f"Sorted by signal strength: {sorted_nodes}")
 
         if not sorted_nodes:
-            _CONNECTION_LOG.debug(
-                "Failed to connect to plejd mesh - No valid devices: %s (%s)",
-                self._seen_nodes,
-                self._connectable_nodes,
-            )
+            # _CONNECTION_LOG.debug(
+            #     "Failed to connect to plejd mesh - No valid devices: %s (%s)",
+            #     self._seen_nodes,
+            #     self._connectable_nodes,
+            # )
             return False
         client = None
         for node in sorted_nodes:
@@ -109,7 +129,7 @@ class PlejdMesh:
                 _CONNECTION_LOG.debug("Attempting to connect to %s", node)
                 client = await establish_connection(
                     BleakClient,
-                    node,
+                    node.bleDevice,
                     "plejd",
                     _disconnect,
                     max_attempts=1,
@@ -118,7 +138,9 @@ class PlejdMesh:
                 if not await self._authenticate(client):
                     await client.disconnect()
                     continue
-                self._gateway_node = node.address
+                self._gateway_node = node
+                node.is_gateway = True
+                self._gateway_node.update()
                 break
 
             except (BleakError, asyncio.TimeoutError) as e:
@@ -132,7 +154,9 @@ class PlejdMesh:
 
         async def _lastdata_listener(_arg, lastdata: bytearray):
 
-            data = encrypt_decrypt(self._crypto_key, self._gateway_node, lastdata)
+            data = encrypt_decrypt(
+                self._crypto_key, self._gateway_node.BLEaddress, lastdata
+            )
 
             ld = LastData(data)
             rec_log(f"lastdata {ld}")
@@ -180,10 +204,10 @@ class PlejdMesh:
         if client is None:
             return False
         payloads = payload_encode.request_time(self, address)
-        await self._write(payloads)
+        await self.write(payloads)
 
         retval = await client.read_gatt_char(gatt.PLEJD_LASTDATA)
-        data = encrypt_decrypt(self._crypto_key, self._gateway_node, retval)
+        data = encrypt_decrypt(self._crypto_key, self._gateway_node.BLEaddress, retval)
         ts = int.from_bytes(data[5:9], "little")
         dt = datetime.fromtimestamp(ts)
 
@@ -195,13 +219,13 @@ class PlejdMesh:
 
     async def broadcast_time(self):
         payloads = payload_encode.set_time(self)
-        await self._write(payloads)
+        await self.write(payloads)
 
     async def write(self, *payloads: list[str]):
         pl = [
             encrypt_decrypt(
                 self._crypto_key,
-                self._gateway_node,
+                self._gateway_node.BLEaddress,
                 binascii.a2b_hex(payload.replace(" ", "")),
             )
             for payload in payloads

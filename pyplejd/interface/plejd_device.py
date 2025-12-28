@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..ble import PlejdMesh
+    from .plejd_hardware import PlejdHardware
 
 
 class PlejdTraits(IntFlag):
@@ -42,6 +43,7 @@ class PlejdDevice:
         mesh: PlejdMesh,
         rxAddress: int,
         *_,
+        first_device: sd.Device = None,
         **__,
     ):
         self.address = address
@@ -59,11 +61,18 @@ class PlejdDevice:
 
         self.outputType = PlejdDeviceType.UNKNOWN
         self.identifier = None
-        self.device_identifier = (plejdDevice.deviceId, device.objectId)
+        self.is_primary = first_device
+        self.device_identifier = f"{plejdDevice.deviceId}:{device.objectId}"
+        self.parent_identifier = (
+            f"{plejdDevice.deviceId}:{first_device.objectId}"
+            if first_device
+            else self.device_identifier
+        )
         self.capabilities = PlejdTraits(self.deviceData.traits)
         self.ble_mac = ":".join(
             device.deviceId[i : i + 2] for i in range(0, len(device.deviceId), 2)
         )
+        self.hw: PlejdHardware = None
 
     def __repr__(self):
         return f"<{self.__class__.__name__} {self.BLEaddress} ({self.address}) {self.name} [{self.hardware}] {self.outputType}-{self.capabilities!r}>"

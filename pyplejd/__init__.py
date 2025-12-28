@@ -33,8 +33,6 @@ dt = DeviceTypes
 get_sites = PlejdCloudSite.get_sites
 verify_credentials = PlejdCloudSite.verify_credentials
 
-blacklist = []  # TODO: MAKE WORK
-
 
 class PlejdManager:
     def __init__(self, username: str, password: str, siteId: str):
@@ -46,8 +44,20 @@ class PlejdManager:
 
         self.mesh = PlejdMesh(self)
         self.devices: list[dt.PlejdDevice | dt.PlejdScene] = []
+        self.hardware: dict[str, dt.PlejdHardware] = {}
+        self.blacklist = []  # TODO: MAKE WORK
         self.cloud = PlejdCloudSite(**self.credentials)
         self.options = {}
+
+    def _get_hw(self, addr: str, device: dt.PlejdDevice) -> dt.PlejdHardware:
+        addr = addr.replace(":", "").upper()
+        if addr not in self.hardware:
+            self.hardware[addr] = dt.PlejdHardware(
+                addr,
+                device.powered,
+                blacklisted=addr in self.blacklist,
+            )
+        return self.hardware[addr]
 
     def connect_callback(self, connected: bool):
         for d in self.devices:
@@ -83,8 +93,12 @@ class PlejdManager:
             dev = cls(**device, mesh=self.mesh)
             LOGGER.debug(dev)
             self.devices.append(dev)
-            if dev.BLEaddress not in blacklist:
-                self.mesh.expect_device(dev.BLEaddress, dev.powered)
+
+            hw = self._get_hw(dev.BLEaddress, dev)
+            hw.devices.add(dev)
+            dev.hw = hw
+
+            self.mesh.expect_device(hw)
 
         LOGGER.debug("Input Devices:")
         for device in self.cloud.inputs:
@@ -92,8 +106,12 @@ class PlejdManager:
             dev = cls(**device, mesh=self.mesh)
             LOGGER.debug(dev)
             self.devices.append(dev)
-            if dev.BLEaddress not in blacklist:
-                self.mesh.expect_device(dev.BLEaddress, dev.powered)
+
+            hw = self._get_hw(dev.BLEaddress, dev)
+            hw.devices.add(dev)
+            dev.hw = hw
+
+            self.mesh.expect_device(hw)
 
         LOGGER.debug("Scenes:")
         for scene in self.cloud.scenes:

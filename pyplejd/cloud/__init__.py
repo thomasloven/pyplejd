@@ -161,6 +161,7 @@ class PlejdCloudSite:
 
         for deviceId, outputs in details.outputAddress.items():
             plejdDevice = details.find_plejdDevice(deviceId)
+            firstDevice = details.find_device(deviceId=deviceId)
             deviceAddress = details.deviceAddress.get(deviceId)
 
             for output, address in outputs.items():
@@ -184,6 +185,7 @@ class PlejdCloudSite:
                     "rxAddress": rxAddress,
                     "settings": settings,
                     "room": room,
+                    "first_device": firstDevice,
                 }
 
     @property
@@ -194,6 +196,7 @@ class PlejdCloudSite:
 
         for deviceId, inputs in details.inputAddress.items():
             plejdDevice = details.find_plejdDevice(deviceId)
+            firstDevice = details.find_device(deviceId=deviceId)
             deviceAddress = details.deviceAddress.get(deviceId)
 
             for input, address in inputs.items():
@@ -219,6 +222,7 @@ class PlejdCloudSite:
                     "room": room,
                     "motion": bool(motionSensor),
                     "rxAddress": -1,
+                    "first_device": firstDevice,
                 }
 
     @property

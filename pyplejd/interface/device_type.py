@@ -1,4 +1,4 @@
-""" All device types handled by pyplejd """
+"""All device types handled by pyplejd"""
 
 from .plejd_device import (
     PlejdDevice,
@@ -7,6 +7,7 @@ from .plejd_device import (
     PlejdTraits,
     PlejdDeviceType,
 )
+from .plejd_hardware import PlejdHardware
 from .plejd_button import PlejdButton
 from .plejd_cover import PlejdCover
 from .plejd_fellowship_follower import PlejdFellowshipFollower
@@ -20,6 +21,7 @@ __all__ = [
     "PlejdDevice",
     "PlejdInput",
     "PlejdOutput",
+    "PlejdHardware",
     "PlejdButton",
     "PlejdCover",
     "PlejdFellowshipFollower",
