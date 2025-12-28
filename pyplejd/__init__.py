@@ -45,9 +45,17 @@ class PlejdManager:
         self.mesh = PlejdMesh(self)
         self.devices: list[dt.PlejdDevice | dt.PlejdScene] = []
         self.hardware: dict[str, dt.PlejdHardware] = {}
-        self.blacklist = set()  # TODO: MAKE WORK
+        self._blacklist = set()  # TODO: MAKE WORK
         self.cloud = PlejdCloudSite(**self.credentials)
         self.options = {}
+
+    @property
+    def blacklist(self):
+        return self._blacklist
+
+    @blacklist.setter
+    def blacklist(self, blacklist):
+        self._blacklist = set(a.replace(":", "").upper() for a in blacklist)
 
     def _get_hw(self, addr: str, device: dt.PlejdDevice) -> dt.PlejdHardware:
         addr = addr.replace(":", "").upper()
@@ -156,7 +164,7 @@ class PlejdManager:
         await self.mesh.disconnect()
 
     async def set_blacklist(self, blacklist):
-        self.blacklist = set(a.replace(":", "").upper() for a in blacklist)
+        self.blacklist = blacklist
         reconnect = False
         for hw in self.hardware.values():
             hw.blacklisted = hw.BLEaddress in self.blacklist
@@ -164,4 +172,4 @@ class PlejdManager:
                 reconnect = True
         if reconnect:
             await self.mesh.disconnect()
-            await self.ping()
+        await self.ping()
