@@ -12,13 +12,16 @@ if TYPE_CHECKING:
 
 
 class PlejdTraits(IntFlag):
-    POWER = 0x8
-    TEMP = 0x4
-    DIM = 0x2
-    GROUP = 0x1
+    POWER = 0x1  # Powerable
+    DIM = 0x2  # Dimmable
+    TEMP = 0x4  # WhiteTunable
+    GROUP = 0x8  # Groupable
 
-    COVER = 0x10
-    TILT = 0x40
+    COVER = 0x10  # Coverable
+    TILT = 0x40  # CoverTiltable
+
+    CLIMATE = 0x20  # ClimateControllable
+    CLIMATE_PWM = 0x80
 
 
 class PlejdDeviceType(StrEnum):
@@ -27,6 +30,7 @@ class PlejdDeviceType(StrEnum):
     BUTTON = "SENSOR"
     MOTION = "MOTION"
     COVER = "COVERABLE"
+    CLIMATE = "CLIMATE"
     SCENE = "SCENE"
     UNKNOWN = "UNKNOWN"
 

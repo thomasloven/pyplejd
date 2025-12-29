@@ -14,6 +14,19 @@ from ..ble import LastData, MiniPkg, LightLevel
 
 class PlejdThermostat(PlejdOutput):
 
+    MODE_SERVICE = 0
+    MODE_VACATION = 2
+    MODE_BOOST = 3
+    MODE_FROST = 4
+    MODE_NIGHT = 5
+    MODE_LOW = 6
+    MODE_NORMAL = 7
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.outputType = PlejdDeviceType.CLIMATE
+
     def _parse_state(self, state: int, payload: list[int]):
 
         data = state << 16 + payload[0] << 8 + payload[1]
@@ -50,18 +63,64 @@ class PlejdThermostat(PlejdOutput):
 
     async def parse_lastdata(self, data):
         state = self._state
-        if data.command in [
-            LastData.CMD_OUTPUT_STATE_AND_LEVEL,
-            LastData.CMD_GROUP_OUTPUT_STATE_AND_LEVEL,
-        ]:
-            state.update(self._parse_state(data.payload[0], data.payload[1:]))
+        match data.command:
+            case (
+                LastData.CMD_OUTPUT_STATE_AND_LEVEL
+                | LastData.CMD_GROUP_OUTPUT_STATE_AND_LEVEL
+            ):
+                state.update(self._parse_state(data.payload[0], data.payload[1:]))
+            case LastData.CMD_TRM_TEMPERATURE_REGULATING_SETPOINT:
+                state["target"] = int.from_bytes(data.payload[5:7], byteorder="little")
+
         for listener in self._listeners:
             listener(self._state)
 
+    async def set_target_temp(self, temp):
+        temp = int(temp) * 10
+        await self._mesh.write(
+            LastData(
+                address=self.address,
+                command=LastData.CMD_TRM_TEMPERATURE_REGULATING_SETPOINT,
+                payload=[temp & 0xFF, (temp >> 8) & 0xFF],
+            ).hex
+        )
 
-def target_temp(temp):
-    num1 = temp * 10
-    num2 = (num1 & 0x8) >> 8
+    async def turn_on(self):
+        await self._mesh.write(
+            LastData(
+                address=self.address,
+                command=LastData.CMD_TMR_OPERATING_MODE,
+                payload=[PlejdThermostat.MODE_NORMAL],
+            ).hex
+        )
 
-    (LastData.CMD_TRM_TEMPERATURE_REGULATING_SETPOINT, [num1, num2])
-    pass
+    async def turn_off(self):
+        await self._mesh.write(
+            LastData(
+                address=self.address,
+                command=LastData.CMD_TMR_OPERATING_MODE,
+                payload=[PlejdThermostat.MODE_SERVICE],
+            ).hex
+        )
+
+    async def set_mode(self, mode=None):
+        if mode is None:
+            await self._mesh.write(
+                LastData(
+                    address=self.address,
+                    command=LastData.CMD_TMR_OPERATING_MODE,
+                    payload=[PlejdThermostat.MODE_NORMAL],
+                ).hex
+            )
+        else:
+            await self._mesh.write(
+                LastData(
+                    address=self.address,
+                    command=LastData.CMD_TMR_OPERATING_MODE,
+                    payload=[mode],
+                ).hex
+            )
+
+    @property
+    def preset(self):
+        return self._state.get("mode", PlejdThermostat.MODE_NORMAL)
