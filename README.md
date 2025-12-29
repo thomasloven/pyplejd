@@ -10,8 +10,12 @@ Contributors not listed in git history - in no particular order:
 - [@bnordli](https://github.com/bnordli)
 - [@oyvindwe](https://github.com/oyvindwe)
 - [@NewsGuyTor](https://github.com/NewsGuyTor)
+- [@genesiscrew](https://github.com/genesiscrew)
 
 ---
+
+**INFORMATION BELOW IS DEPRECATED**
+To be updated soon
 
 Much information below is taken from here: https://github.com/icanos/hassio-plejd/issues/163
 
