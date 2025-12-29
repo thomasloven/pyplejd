@@ -112,7 +112,11 @@ class PlejdDevice:
 
     @property
     def powered(self):
-        return PlejdTraits.POWER in self.capabilities
+        return (
+            PlejdTraits.POWER in self.capabilities
+            or PlejdTraits.COVER in self.capabilities
+            or PlejdTraits.CLIMATE in self.capabilities
+        )
 
     @property
     def name(self):

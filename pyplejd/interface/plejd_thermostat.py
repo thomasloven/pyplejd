@@ -1,5 +1,5 @@
-from .plejd_device import PlejdOutput, PlejdTraits, PlejdDeviceType
-from ..ble import LastData, MiniPkg, LightLevel
+from .plejd_device import PlejdOutput, PlejdDeviceType
+from ..ble import LastData, LightLevel
 
 
 # Modes:
@@ -9,6 +9,7 @@ from ..ble import LastData, MiniPkg, LightLevel
 # 3 Boost
 # 4 FrostProtection
 # 5 NightTimeReduction
+# 6 DayTimeReduction
 # 7 Normal
 
 
@@ -48,7 +49,7 @@ class PlejdThermostat(PlejdOutput):
         current = data & 0x00003F
 
         return {
-            "mode": -1 if error else mode,
+            "mode": None if error else mode,
             "target": target - 10,
             "current": current - 10,
         }
@@ -123,4 +124,4 @@ class PlejdThermostat(PlejdOutput):
 
     @property
     def preset(self):
-        return self._state.get("mode", PlejdThermostat.MODE_NORMAL)
+        return self._state.get("mode", None)
