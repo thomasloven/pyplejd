@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 MIN_PY_VERSION = "3.10"
 PACKAGES = find_packages()
-VERSION = "0.14.7"
+VERSION = "0.20.0"
 
 setup(
     name="pyplejd",
