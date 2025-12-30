@@ -30,7 +30,7 @@ class PlejdThermostat(PlejdOutput):
 
     def _parse_state(self, state: int, payload: list[int]):
 
-        data = state << 16 + payload[0] << 8 + payload[1]
+        data = (state << 16) | (payload[0] << 8) | payload[1]
 
         # 0000 000S 1111 1111 2222 2222
         # S = State bit
