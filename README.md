@@ -11,6 +11,7 @@ Contributors not listed in git history - in no particular order:
 - [@oyvindwe](https://github.com/oyvindwe)
 - [@NewsGuyTor](https://github.com/NewsGuyTor)
 - [@genesiscrew](https://github.com/genesiscrew)
+- [@MHultman](https://github.com/MHultman)
 
 ---
 

@@ -20,8 +20,6 @@ def outputDeviceClass(device: PlejdEntityData) -> Type[dt.PlejdDevice]:
         return dt.PlejdRelay
     if tpe == "COVERABLE":
         return dt.PlejdCover
-    if tpe == "CLIMATE":
-        return dt.PlejdThermostat
 
     traits = dt.PlejdTraits(device["device"].traits)
     if dt.PlejdTraits.CLIMATE in traits:

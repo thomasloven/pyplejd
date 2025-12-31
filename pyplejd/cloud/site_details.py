@@ -156,6 +156,29 @@ class CoverableSettings(BaseModel):
     # coverableCalibration: dict
 
 
+class TemperatureLimits(BaseModel):
+    maxFloorTemperature: int
+    minFloorTemperature: int
+    maxRoomTemperature: int
+    minRoomTemperature: int
+    maxUserInputTemperature: int
+    minUserInputTemperature: int
+
+
+class PWMRegulationConfig(BaseModel):
+    interval: int
+    minDuty: int
+    maxDuty: int
+    minDutyUserInput: int
+    maxDutyUserInput: int
+
+
+class ClimateSettings(BaseModel):
+    regulationMode: str  # Floor/Room/PWM ?
+    temperatureLimits: TemperatureLimits | None = None
+    pwmRegulationConfig: PWMRegulationConfig | None = None
+
+
 class PlejdDeviceOutputSetting(PlejdObject):
     deviceId: str
     siteId: str
@@ -175,6 +198,7 @@ class PlejdDeviceOutputSetting(PlejdObject):
     colorTemperature: ColorTemperature | None = None
     coverableSettings: CoverableSettings | None = None
     # minimumRelayOffTime: int = None
+    climateSettings: ClimateSettings | None = None
 
 
 class MotionSensor(PlejdObject):

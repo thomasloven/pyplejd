@@ -31,6 +31,7 @@ class PlejdDeviceType(StrEnum):
     MOTION = "MOTION"
     COVER = "COVERABLE"
     CLIMATE = "CLIMATE"
+    PWM = "PWM"
     SCENE = "SCENE"
     UNKNOWN = "UNKNOWN"
 
