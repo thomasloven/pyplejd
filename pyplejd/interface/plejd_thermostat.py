@@ -62,7 +62,7 @@ class PlejdThermostat(PlejdOutput):
         target = (data & 0x001FC0) >> 6
         current = data & 0x00003F
         heating = None
-        if len(payload > 2):
+        if len(payload) > 2:
             heating = bool(payload[2] & 0x80)
 
         return {
