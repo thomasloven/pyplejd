@@ -189,6 +189,7 @@ class PlejdMesh:
         await self.write(LastData(command=LastData.CMD_EVENT_PREPARE).hex)
 
     async def ping(self):
+        retval = False
         async with self._ble_lock:
             if not await self.connect():
                 retval = False
