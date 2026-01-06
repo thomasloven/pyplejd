@@ -117,6 +117,7 @@ class PlejdDevice:
             PlejdTraits.POWER in self.capabilities
             or PlejdTraits.COVER in self.capabilities
             or PlejdTraits.CLIMATE in self.capabilities
+            or self.hardware.startswith("EXT-01")
         )
 
     @property
@@ -132,7 +133,7 @@ class PlejdDevice:
         return self.deviceData.hiddenFromRoomList
 
     @property
-    def hardware(self):
+    def hardware(self) -> str:
         if self.plejdDevice.firmware.notes:
             return self.plejdDevice.firmware.notes.split()[0]
         return f"-UNKNOWN- ({self.plejdDevice.hardwareId})"
