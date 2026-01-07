@@ -10,3 +10,4 @@ class PlejdFellowshipFollower(PlejdDevice):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.outputType = None
+        self.identifier = (self.plejdDevice.deviceId, "F", str(self.settings.output))

@@ -30,7 +30,7 @@ class PlejdScene:
         self._listeners = set()
 
         self.outputType = PlejdDeviceType.SCENE
-        self.identifier = self.scene.sceneId
+        self.identifier = (self.scene.sceneId,)
         self.address = 2
         self.rxAddress = -1
         self.hw = None
