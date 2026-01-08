@@ -100,15 +100,16 @@ class PlejdThermostat(PlejdOutput):
 
     async def set_target_temp(self, temp):
         if self.regulation_mode == "PWM":
+            temp = int(temp)
             await self._mesh.write(
                 LastData(
                     address=self.address,
                     command=LastData.CMD_TRM_PWM_DUTY,
                     payload=[temp & 0xFF],
-                )
+                ).hex
             )
         else:
-            temp = int(temp) * 10
+            temp = int(temp * 10)
             await self._mesh.write(
                 LastData(
                     address=self.address,
