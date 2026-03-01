@@ -74,7 +74,7 @@ class PlejdManager:
     async def lightlevel_callback(self, lightlevels: list[LightLevel]):
         for ll in lightlevels:
             for d in self.devices:
-                if ll.address in [d.address, d.rxAddress]:
+                if ll.address == d.address:
                     await d.parse_lightlevel(ll)
 
     async def lastdata_callback(self, data: LastData):
