@@ -65,10 +65,14 @@ class PlejdThermostat(PlejdOutput):
         if len(payload) > 2:
             heating = bool(payload[2] & 0x80)
 
+        if not self.regulation_mode == "PWM":
+            target = target - 10
+            current = current - 10
+
         return {
             "mode": None if error else mode,
-            "target": target - 10,
-            "current": current - 10,
+            "target": target,
+            "current": current,
             "heating": heating,
         }
 
