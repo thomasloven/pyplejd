@@ -1,12 +1,11 @@
-try:
-    from pydantic.v1 import BaseModel
-except ImportError:
-    from pydantic import BaseModel
+from typing import Optional
+
+from pydantic import BaseModel
 
 
 class Site(BaseModel):
     siteId: str
-    title: str | None = ""
+    title: Optional[str] = ""
 
 
 class SiteListItem(BaseModel):
