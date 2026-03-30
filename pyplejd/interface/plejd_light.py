@@ -1,10 +1,6 @@
-import logging
-
 from .plejd_device import PlejdOutput, PlejdTraits, PlejdDeviceType
 from ..ble import LastData, MiniPkg, LightLevel
 from ..ble.debug import rec_log
-
-_LOGGER = logging.getLogger(__name__)
 
 
 class PlejdLight(PlejdOutput):
@@ -46,10 +42,7 @@ class PlejdLight(PlejdOutput):
                     if len(data.payload) > 2:
                         state["dim"] = data.payload[2]
                     else:
-                        _LOGGER.debug(
-                            "plejd short payload for device %s command 0x%04x: %s",
-                            self.address, data.command, data.hex
-                        )
+                        rec_log(f"Short payload for command 0x{data.command:04x}: {data.hex}", self.address)
             case LastData.CMD_OUTPUT_SET:
                 for p in data.minipkgs:
                     if p.type == MiniPkg.TPE_WHITEBALANCE:
