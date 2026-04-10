@@ -39,7 +39,7 @@ class MeshDevice:
         self.last_seen = datetime.now()
         self.rssi = max(self.rssi, rssi)
 
-        return first_seen
+        return first_seen is None
 
     def update():
         pass
