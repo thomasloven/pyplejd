@@ -32,14 +32,14 @@ class MeshDevice:
 
     def see(self, rssi, bleDevice: BLEDevice) -> bool:
         # Returns true if first seen
-        if (first_seen := self.rssi) is None:
+        if (first_seen := (self.rssi is None)):
             self.bleDevice = bleDevice
             self.rssi = rssi
 
         self.last_seen = datetime.now()
         self.rssi = max(self.rssi, rssi)
 
-        return first_seen is None
+        return first_seen
 
     def update():
         pass
