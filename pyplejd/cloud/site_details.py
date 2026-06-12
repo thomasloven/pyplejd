@@ -36,7 +36,7 @@ class User(PlejdObject):
 
 class Site(PlejdObject):
     # installers: list[str] = []
-    title: str
+    title: str = ""
     siteId: str
     version: int
     # plejdMesh: Pointer # Pointer to SiteData.plejdMesh
@@ -60,13 +60,13 @@ class PlejdMesh(PlejdObject):
 class Room(PlejdObject):
     siteId: str
     roomId: str
-    title: str
+    title: str = ""
     category: str
     # imageHash: int
 
 
 class Scene(PlejdObject):
-    title: str
+    title: str = ""
     sceneId: str
     siteId: str
     hiddenFromSceneList: bool = False
@@ -76,7 +76,7 @@ class Scene(PlejdObject):
 class Device(PlejdObject):
     deviceId: str
     siteId: str
-    title: str
+    title: str = ""
     traits: int
     hiddenFromRoomList: bool = False
     roomId: Optional[str] = ""
