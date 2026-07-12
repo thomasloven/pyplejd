@@ -123,25 +123,23 @@ class PlejdMesh:
                     node.bleDevice.name,
                     max_attempts=2,
                 )
-
-                # Workaround for problem in plejd firmware 2026-05-20
-                # Disconnect and connect again
-                _CONNECTION_LOG.debug(
-                    "BT Proxy workaround - Disconnecting for 5 seconds."
-                )
-                await client.disconnect()
-                await asyncio.sleep(5)
-                _CONNECTION_LOG.debug("BT Proxy workaround - Reconnecting")
-                client = await establish_connection(
-                    BleakClientWithServiceCache,
-                    node.bleDevice,
-                    node.bleDevice.name,
-                    _disconnect,
-                )
+                client.set_disconnected_callback(_disconnect)
 
                 if not await self._authenticate(client):
+                    _CONNECTION_LOG.debug(
+                        "Initial authentication failed; retrying with BT Proxy workaround"
+                    )
                     await client.disconnect()
-                    continue
+                    await asyncio.sleep(5)
+                    client = await establish_connection(
+                        BleakClientWithServiceCache,
+                        node.bleDevice,
+                        node.bleDevice.name,
+                        _disconnect,
+                    )
+                    if not await self._authenticate(client):
+                        await client.disconnect()
+                        continue
                 self._gateway_node = node
                 node.is_gateway = True
                 self._gateway_node.update()
