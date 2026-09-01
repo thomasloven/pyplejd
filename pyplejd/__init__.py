@@ -1,7 +1,7 @@
 from __future__ import annotations
 import logging
 import asyncio
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from bleak_retry_connector import close_stale_connections
 
@@ -49,6 +49,7 @@ class PlejdManager:
         self.cloud = PlejdCloudSite(**self.credentials)
         self.options = {}
         self.connection_monitor = None
+        self._diagnostics_polled = None
 
     @property
     def blacklist(self):
@@ -152,12 +153,88 @@ class PlejdManager:
     def ping_interval(self):
         return timedelta(minutes=3)
 
+    @property
+    def diagnostics_interval(self):
+        """How often to read per-device diagnostics.
+
+        Deliberately infrequent. Every read puts a request and a response on the
+        air, and mesh airtime is the scarce resource here - a unit busy talking
+        is a unit not relaying for its neighbours.
+        """
+        return timedelta(minutes=15)
+
     async def ping(self, retry=True):
         retval = await self.mesh.ping()
         if not retval and retry:
             await asyncio.sleep(30)
             retval = await self.mesh.ping()
+        if retval:
+            await self._maybe_poll_diagnostics()
         return retval
+
+    async def _maybe_poll_diagnostics(self):
+        """Poll diagnostics if diagnostics_interval has elapsed.
+
+        Driven off ping so the data appears without the integration having to
+        schedule anything, while staying on its own slower clock.
+        """
+        now = datetime.now()
+        if (
+            self._diagnostics_polled is not None
+            and now - self._diagnostics_polled < self.diagnostics_interval
+        ):
+            return
+        self._diagnostics_polled = now
+        await self.poll_diagnostics()
+
+    async def poll_diagnostics(self):
+        """Read temperature and fault state from every mains powered device.
+
+        Battery powered units are asleep and will not answer; they are skipped
+        rather than waited for. A device that does not answer keeps its previous
+        values so a single missed read does not blank the sensors.
+        """
+        if not self.mesh.connected:
+            return
+
+        LOGGER = logging.getLogger("pyplejd.diagnostics")
+        for hw in self.hardware.values():
+            if not hw.connectable:
+                continue
+            address = next(
+                (d.deviceAddress for d in hw.devices if d.deviceAddress is not None),
+                None,
+            )
+            if address is None:
+                continue
+
+            updated = False
+            for command, attribute in (
+                (LastData.CMD_INTERNAL_TEMPERATURE, "internal_temperature"),
+                (LastData.CMD_EXTERNAL_TEMPERATURE, "external_temperature"),
+            ):
+                response = await self.mesh.request(address, command)
+                if response is None or len(response) < 2:
+                    continue
+                setattr(hw, attribute, int.from_bytes(response[:2], "little"))
+                updated = True
+
+            response = await self.mesh.request(address, LastData.CMD_HARDFAULT_REASON)
+            if response is not None:
+                # An empty payload means the device has nothing to report.
+                hw.hardfault = any(response)
+                updated = True
+
+            if updated:
+                hw.diagnostics_updated = datetime.now()
+                hw.update()
+                LOGGER.debug(
+                    "Diagnostics for %s: internal=%s external=%s hardfault=%s",
+                    hw.BLEaddress,
+                    hw.internal_temperature,
+                    hw.external_temperature,
+                    hw.hardfault,
+                )
 
     async def broadcast_time(self):
         for d in self.devices:

@@ -15,6 +15,14 @@ class PlejdHardware(MeshDevice):
         self.last_seen = None
         self.rssi = None
 
+        # Filled in by PlejdManager.poll_diagnostics(). None until first polled,
+        # and left alone if a device stops answering so the last known value
+        # stays visible rather than flapping to unknown.
+        self.internal_temperature: int | None = None
+        self.external_temperature: int | None = None
+        self.hardfault: bool | None = None
+        self.diagnostics_updated = None
+
         self._listeners = set()
 
     def __repr__(self):
