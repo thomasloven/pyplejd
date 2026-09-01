@@ -199,7 +199,9 @@ class PlejdManager:
 
         LOGGER = logging.getLogger("pyplejd.diagnostics")
         for hw in self.hardware.values():
-            if not hw.connectable:
+            # Mains powered, not connectable: a unit excluded from gateway
+            # selection still answers reads perfectly well.
+            if not hw.powered:
                 continue
             address = next(
                 (d.deviceAddress for d in hw.devices if d.deviceAddress is not None),

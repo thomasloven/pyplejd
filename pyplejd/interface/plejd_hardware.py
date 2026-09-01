@@ -29,6 +29,15 @@ class PlejdHardware(MeshDevice):
         return f"PlejdHardware(BLEaddress={self.BLEaddress}, powered={self._powered}, blacklisted={self.blacklisted})"
 
     @property
+    def powered(self):
+        """True if the unit is mains powered.
+
+        Distinct from connectable: a unit excluded from gateway selection is
+        still perfectly able to answer a read.
+        """
+        return self._powered
+
+    @property
     def connectable(self):
         return self._powered and not self.blacklisted
 
