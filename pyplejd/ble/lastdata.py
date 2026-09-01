@@ -103,10 +103,18 @@ class LastData:
     CMD_TRM_PWM_DUTY = 0x0461
     CMD_TRM_RESET_OPERATING_MODE = 0x047E
 
+    # Read-only device diagnostics. Every mains powered unit answers these; battery
+    # powered ones are asleep most of the time and simply do not reply.
+    CMD_FIRMWARE_VERSION = 0x0004  # build stamp, eg 20260324155701
+    CMD_INTERNAL_TEMPERATURE = 0x000D  # MCU temperature, degrees C
+    CMD_EXTERNAL_TEMPERATURE = 0x000F  # external probe, 0 if the unit has none
+    CMD_HARDFAULT_REASON = 0x001D  # empty unless the MCU has faulted
+
     # Command types
     CMDT_WRITE = 0x0
     CMDT_ACK = 0x1
     CMDT_READ = 0x2
+    CMDT_RESPONSE = 0x3  # what a device sends back to a CMDT_READ
     CMDT_DONT_RESPOND = 0x10
 
     def __init__(

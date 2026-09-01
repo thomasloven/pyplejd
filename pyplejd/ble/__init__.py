@@ -58,6 +58,8 @@ class PlejdMesh:
         self._client: BleakClient = None
 
         self._ble_lock = asyncio.Lock()
+        # Outstanding read requests, keyed by (device address, command). See request().
+        self._pending: dict[tuple[int, int], asyncio.Future] = {}
 
     @property
     def connected(self):
@@ -88,7 +90,14 @@ class PlejdMesh:
             pass
 
         self._client = None
+        self._cancel_pending()
         self.manager.connect_callback(False)
+
+    def _cancel_pending(self):
+        for future in self._pending.values():
+            if not future.done():
+                future.cancel()
+        self._pending.clear()
 
     async def connect(self):
         if self.connected:
@@ -98,6 +107,7 @@ class PlejdMesh:
         def _disconnect(client: BleakClient):
             _CONNECTION_LOG.debug("Disconected from BLE mesh (%s)", client)
             self._client = None
+            self._cancel_pending()
             if self._gateway_node:
                 self._gateway_node.is_gateway = False
                 self._gateway_node.update()
@@ -166,6 +176,12 @@ class PlejdMesh:
 
             ld = LastData(data)
             rec_log(f"lastdata {ld}")
+
+            if ld.command_type == LastData.CMDT_RESPONSE:
+                if future := self._pending.pop((ld.address, ld.command), None):
+                    if not future.done():
+                        future.set_result(bytes(ld.payload))
+
             await self.manager.lastdata_callback(ld)
 
             if ld.command == LastData.CMD_EVENT_FIRED:
@@ -247,6 +263,47 @@ class PlejdMesh:
         ]
         _LOGGER.debug(f"Write: {payloads}")
         await self._write(pl)
+
+    async def request(
+        self, address: int, command: int, payload: list[int] = None, timeout: float = 3.0
+    ) -> bytes | None:
+        """Send a read request to a single device and wait for its answer.
+
+        The mesh answers a CMDT_READ with a CMDT_RESPONSE carrying the same
+        address and command, which _lastdata_listener hands back here.
+
+        Returns the response payload, or None if nothing came back in time.
+        A timeout is not an error: battery powered units sleep between button
+        presses and will simply not answer.
+        """
+        if not self.connected:
+            return None
+
+        key = (address, command)
+        if key in self._pending:
+            # Same value already being asked for - wait for that answer instead
+            # of putting a second copy of the question on the air.
+            try:
+                return await asyncio.wait_for(
+                    asyncio.shield(self._pending[key]), timeout
+                )
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                return None
+
+        future = asyncio.get_running_loop().create_future()
+        self._pending[key] = future
+        try:
+            request = LastData(address=address, command=command, payload=payload or [])
+            request.command_type = LastData.CMDT_READ
+            await self.write(request.hex)
+            return await asyncio.wait_for(future, timeout)
+        except (asyncio.TimeoutError, asyncio.CancelledError):
+            return None
+        except (BleakError, EOFError) as err:
+            _LOGGER.debug("Read request %04x to %s failed: %s", command, address, err)
+            return None
+        finally:
+            self._pending.pop(key, None)
 
     async def _write(self, payloads):
         if not self.connected:
