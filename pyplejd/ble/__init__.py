@@ -43,8 +43,8 @@ _CONNECTION_LOG = logging.getLogger("pyplejd.ble.connection")
 # more traffic to relay and therefore needs more radio time, not less, so the
 # margin protects meshes bigger than the one it was measured on. For lighting,
 # the added latency of a few tens of milliseconds is imperceptible.
-CONN_MIN_INTERVAL = 0x18  # 24 * 1.25 ms = 30 ms
-CONN_MAX_INTERVAL = 0x28  # 40 * 1.25 ms = 50 ms
+CONN_MIN_INTERVAL = 24  # 24 * 1.25 ms = 30 ms
+CONN_MAX_INTERVAL = 40  # 40 * 1.25 ms = 50 ms
 CONN_LATENCY = 0
 CONN_TIMEOUT = 800  # 800 * 10 ms = 8 s
 
@@ -329,9 +329,11 @@ class PlejdMesh:
             _CONNECTION_LOG.debug("Could not set connection parameters", exc_info=True)
         else:
             _CONNECTION_LOG.debug(
-                "Requested connection interval %.2f-%.2f ms",
+                "Requested connection interval %.2f-%.2f ms (latency %d, timeout %d ms)",
                 CONN_MIN_INTERVAL * 1.25,
                 CONN_MAX_INTERVAL * 1.25,
+                CONN_LATENCY,
+                CONN_TIMEOUT * 10,
             )
 
     async def _authenticate(self, client: BleakClient):
