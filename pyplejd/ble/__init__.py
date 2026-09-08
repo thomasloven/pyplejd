@@ -21,6 +21,33 @@ from .debug import rec_log
 _LOGGER = logging.getLogger(__name__)
 _CONNECTION_LOG = logging.getLogger("pyplejd.ble.connection")
 
+# Connection parameters requested once the mesh connection is up.
+#
+# A Plejd unit is not only a GATT peripheral: the same radio also carries the
+# Plejd mesh, relaying and re-announcing traffic for every other unit. Home
+# Assistant's Bluetooth stack asks BlueZ for an aggressive 8.75-11.25 ms
+# connection interval, which leaves the unit too little radio time for that
+# second duty. Measured on a two-unit mesh with a local adapter, the effects
+# began abruptly below 15 ms and were severe at 11.25 ms:
+#
+#   interval    behaviour
+#   11.25 ms    unit emits a 1.6 s on/off state pulse train, relays almost
+#               nothing from its peers, and switches its own output unbidden
+#   12.50 ms    same, less frequent
+#   15.00 ms    clean
+#   20.00 ms    clean
+#   45.00 ms    clean
+#
+# 30-50 ms is chosen rather than the measured 15 ms boundary because that
+# boundary was found on the smallest possible mesh. A larger installation has
+# more traffic to relay and therefore needs more radio time, not less, so the
+# margin protects meshes bigger than the one it was measured on. For lighting,
+# the added latency of a few tens of milliseconds is imperceptible.
+CONN_MIN_INTERVAL = 24  # 24 * 1.25 ms = 30 ms
+CONN_MAX_INTERVAL = 40  # 40 * 1.25 ms = 50 ms
+CONN_LATENCY = 0
+CONN_TIMEOUT = 800  # 800 * 10 ms = 8 s
+
 
 class MeshDevice:
     BLEaddress: str
@@ -142,6 +169,7 @@ class PlejdMesh:
                 if not await self._authenticate(client):
                     await client.disconnect()
                     continue
+                await self._relax_connection_params(client)
                 self._gateway_node = node
                 node.is_gateway = True
                 self._gateway_node.update()
@@ -278,6 +306,35 @@ class PlejdMesh:
         except (BleakError, asyncio.TimeoutError) as e:
             _LOGGER.warning("Plejd mesh keepalive signal failed: %s", str(e))
         return False
+
+    async def _relax_connection_params(self, client: BleakClient) -> None:
+        """Ask the host stack for a gentler connection interval.
+
+        See CONN_MIN_INTERVAL above for why this is wanted.
+
+        Best effort by design. The call is habluetooth's
+        HaBleakClientWrapper.set_connection_params(), which is present when
+        running under Home Assistant and handles both the local BlueZ mgmt
+        path and ESPHome proxies. Plain bleak offers no portable equivalent,
+        so a missing method - or a call that fails - is not an error.
+        """
+        set_params = getattr(client, "set_connection_params", None)
+        if set_params is None:
+            return
+        try:
+            await set_params(
+                CONN_MIN_INTERVAL, CONN_MAX_INTERVAL, CONN_LATENCY, CONN_TIMEOUT
+            )
+        except Exception:  # a failed optimisation must not fail the connection
+            _CONNECTION_LOG.debug("Could not set connection parameters", exc_info=True)
+        else:
+            _CONNECTION_LOG.debug(
+                "Requested connection interval %.2f-%.2f ms (latency %d, timeout %d ms)",
+                CONN_MIN_INTERVAL * 1.25,
+                CONN_MAX_INTERVAL * 1.25,
+                CONN_LATENCY,
+                CONN_TIMEOUT * 10,
+            )
 
     async def _authenticate(self, client: BleakClient):
         if client is None:
