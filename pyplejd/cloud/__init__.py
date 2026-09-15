@@ -218,6 +218,26 @@ class PlejdCloudSite:
 
                 room = details.find_room(device.roomId)
 
+                # A built-in sensor like the CCL-01's PIR (buttonType
+                # "CCLMotionSensor") shares its physical unit's mesh
+                # address with output 0 (see inputAddress vs outputAddress
+                # in the site data - both list the same value for this
+                # deviceId), but a detection is reported on that output's
+                # own *response* address, not the plain address every
+                # other input listens on: the mesh's CMD_OUTPUT_SET/
+                # SRC_MOTION report for this deviceId arrives addressed to
+                # rxAddress[deviceId]["0"], exactly like the output's own
+                # state reports do (see PlejdCloudSite.outputs above).
+                # Hard-coding -1 here (this property's only previous
+                # value) meant that report could only ever reach this
+                # device's colocated PlejdOutput - never this PlejdInput -
+                # so PlejdMotionSensor.trigger() was unreachable no matter
+                # what parse_lastdata did with it once received. Not every
+                # input has an associated output (a standalone button has
+                # no entry in rxAddress at all), so this still falls back
+                # to -1 exactly as before for anything that isn't one.
+                rxAddress = details.rxAddress.get(deviceId, {}).get("0", -1)
+
                 yield {
                     "address": address,
                     "deviceAddress": deviceAddress,
@@ -226,7 +246,7 @@ class PlejdCloudSite:
                     "settings": settings,
                     "room": room,
                     "motion": bool(motionSensor),
-                    "rxAddress": -1,
+                    "rxAddress": rxAddress,
                     "first_device": firstDevice,
                 }
 
