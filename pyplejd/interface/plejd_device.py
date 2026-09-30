@@ -65,8 +65,10 @@ class PlejdDevice:
         self._listeners = set()
 
         self.outputType = PlejdDeviceType.UNKNOWN
-        self.identifier = None
-        self.is_primary = first_device
+        self.identifier = (self.plejdDevice.deviceId, "-")
+        self.is_primary = (
+            (device.objectId == first_device.objectId) if first_device else True
+        )
         self.device_identifier = f"{plejdDevice.deviceId}:{device.objectId}"
         self.parent_identifier = (
             f"{plejdDevice.deviceId}:{first_device.objectId}"
