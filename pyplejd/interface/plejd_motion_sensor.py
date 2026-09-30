@@ -63,7 +63,18 @@ class PlejdMotionSensor(PlejdInput):
                 )
                 cmd.command_type = LastData.CMDT_READ
                 rec_log(f"Write {cmd.hex}", self.address)
-                await self._mesh.write(cmd.hex)
+                # This follow-up read is best-effort: it only refreshes the
+                # lux attribute. A failure here (mesh busy, transient BLE
+                # error) must not swallow the SRC_MOTION detection we just
+                # parsed above - without this guard, an exception here
+                # propagates out of parse_lastdata and the code below that
+                # notifies HA's listeners (and thus self.trigger()'s state)
+                # never runs, so the motion detection would never reach
+                # Home Assistant despite having been correctly decoded.
+                try:
+                    await self._mesh.write(cmd.hex)
+                except Exception as ex:
+                    rec_log(f"Failed to request ambient light level: {ex}", self.address)
             case _:
                 if data.address in [self.address, self.rxAddress]:
                     rec_log(f"Unknown command received: {data.command}", self.address)
