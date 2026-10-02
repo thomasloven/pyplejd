@@ -42,12 +42,20 @@ class PlejdMotionSensor(PlejdInput):
                 rec_log(f"MOTION {addr=} {button=}", self.address)
                 self.trigger()
             case LastData.CMD_OUTPUT_SET:
+                rec_log(f"DBG-0 entered CMD_OUTPUT_SET case", self.address)
                 for p in data.minipkgs:
-                    if (
+                    is_match = (
                         p.type == MiniPkg.TPE_SOURCE
-                        and p.payload
+                        and bool(p.payload)
                         and p.payload[0] == MiniPkg.SRC_MOTION
-                    ):
+                    )
+                    rec_log(
+                        f"DBG-1 p.type={p.type!r} p.payload={p.payload!r} "
+                        f"TPE_SOURCE={MiniPkg.TPE_SOURCE!r} SRC_MOTION={MiniPkg.SRC_MOTION!r} "
+                        f"is_match={is_match}",
+                        self.address,
+                    )
+                    if is_match:
                         self.trigger()
                     if p.type == MiniPkg.TPE_BATTERYINFO:
                         state["battery"] = int.from_bytes(p.payload, byteorder="big")
