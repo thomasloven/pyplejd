@@ -71,21 +71,26 @@ class PlejdMotionSensor(PlejdInput):
                 # notifies HA's listeners (and thus self.trigger()'s state)
                 # never runs, so the motion detection would never reach
                 # Home Assistant despite having been correctly decoded.
+                rec_log(f"DBG-A reached try block", self.address)
                 try:
                     await self._mesh.write(cmd.hex)
+                    rec_log(f"DBG-B write succeeded", self.address)
                 except Exception as ex:
-                    rec_log(f"Failed to request ambient light level: {ex}", self.address)
+                    rec_log(f"DBG-C write raised: {ex!r}", self.address)
             case _:
                 if data.address in [self.address, self.rxAddress]:
                     rec_log(f"Unknown command received: {data.command}", self.address)
                     rec_log(f"    {data.hex}", self.address)
                 return
 
+        rec_log(f"DBG-D about to notify, {len(self._listeners)} listener(s), state={self._state}", self.address)
         for listener in self._listeners:
             listener(self._state)
+        rec_log(f"DBG-E notified", self.address)
         self._state["motion"] = None
 
     def trigger(self):
+        rec_log(f"DBG-T trigger() called", self.address)
         self._state["motion"] = True
         if self.cooldown:
             self.cooldown()
