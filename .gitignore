@@ -5,6 +5,8 @@
 !LICENSE
 !setup.py
 !setup.cfg
+!pytest.ini
 !pyplejd/
 **/__pycache__/
 !compiling.md
+!tests/
