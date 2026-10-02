@@ -7,6 +7,7 @@ from typing import Callable
 import time
 
 from bleak import BleakClient, BleakError
+from bleak.exc import BleakCharacteristicNotFoundError
 from bleak.backends.device import BLEDevice
 from bleak_retry_connector import establish_connection, BleakClientWithServiceCache
 
@@ -48,6 +49,11 @@ CONN_MAX_INTERVAL = 40  # 40 * 1.25 ms = 50 ms
 CONN_LATENCY = 0
 CONN_TIMEOUT = 800  # 800 * 10 ms = 8 s
 
+# A single timed-out keepalive through a busy BLE proxy is not proof the
+# connection is dead, so plain timeouts must repeat before the connection is
+# dropped. A missing characteristic is conclusive and drops it immediately.
+MAX_CONSECUTIVE_KEEPALIVE_FAILURES = 2
+
 
 class MeshDevice:
     BLEaddress: str
@@ -83,12 +89,13 @@ class PlejdMesh:
         self._gateway_node: MeshDevice | None = None
         self._crypto_key: bytearray = None
         self._client: BleakClient = None
+        self._consecutive_keepalive_failures = 0
 
         self._ble_lock = asyncio.Lock()
 
     @property
     def connected(self):
-        return self._client is not None
+        return self._client is not None and self._client.is_connected
 
     def expect_device(self, node: MeshDevice = None):
         self._mesh_devices[node.BLEaddress] = node
@@ -104,31 +111,77 @@ class PlejdMesh:
         self._crypto_key = key
 
     async def disconnect(self):
-        if not self.connected:
+        if self._client is None:
             return False
-
-        try:
-            await self._client.stop_notify(gatt.PLEJD_LASTDATA)
-            await self._client.stop_notify(gatt.PLEJD_LIGHTLEVEL)
-            await self._client.disconnect()
-        except BleakError:
-            pass
-
-        self._client = None
+        client = self._forget_connection()
+        await self._teardown(client, clear_cache=False)
         self.manager.connect_callback(False)
+
+    def _forget_connection(self) -> BleakClient | None:
+        client, self._client = self._client, None
+        self._consecutive_keepalive_failures = 0
+        if self._gateway_node:
+            self._gateway_node.is_gateway = False
+            self._gateway_node.update()
+            self._gateway_node = None
+        return client
+
+    async def _teardown(self, client: BleakClient, clear_cache: bool):
+        # Every step runs regardless of the others. On a half-dead link
+        # stop_notify fails, and skipping disconnect() because of it would leak
+        # one of the few connection slots on an ESPHome BLE proxy.
+        steps = [
+            lambda: client.stop_notify(gatt.PLEJD_LASTDATA),
+            lambda: client.stop_notify(gatt.PLEJD_LIGHTLEVEL),
+        ]
+        if clear_cache and hasattr(client, "clear_cache"):
+            # Reconnecting with a stale service cache brings back the very
+            # "characteristic not found" errors that got the connection dropped.
+            steps.append(client.clear_cache)
+        steps.append(client.disconnect)
+
+        for step in steps:
+            try:
+                await step()
+            except (BleakError, asyncio.TimeoutError):
+                _CONNECTION_LOG.debug("Teardown step failed", exc_info=True)
+
+    async def _drop_unhealthy_connection(self, reason: str):
+        """Drop a connection whose link is up but whose GATT services are not.
+
+        This state follows e.g. an ESPHome proxy reconnect. Bleak's disconnect
+        callback never fires for it, so without this the mesh would keep
+        retrying on a client that can no longer do anything.
+        """
+        if self._client is None:
+            return
+        _CONNECTION_LOG.warning("Dropping unhealthy plejd mesh connection: %s", reason)
+        client = self._forget_connection()
+        await self._teardown(client, clear_cache=True)
+        self.manager.connect_callback(False)
+
+    async def _record_keepalive_failure(self, error: Exception | None):
+        self._consecutive_keepalive_failures += 1
+        if isinstance(error, BleakCharacteristicNotFoundError):
+            await self._drop_unhealthy_connection(str(error))
+        elif self._consecutive_keepalive_failures >= MAX_CONSECUTIVE_KEEPALIVE_FAILURES:
+            await self._drop_unhealthy_connection(
+                f"{self._consecutive_keepalive_failures} consecutive keepalive failures"
+            )
 
     async def connect(self):
         if self.connected:
             return True
+        if self._client is not None:
+            # Link went away without the disconnect callback firing.
+            await self._drop_unhealthy_connection("client reports not connected")
         _CONNECTION_LOG.debug("Trying to connect to BLE mesh")
 
         def _disconnect(client: BleakClient):
             _CONNECTION_LOG.debug("Disconected from BLE mesh (%s)", client)
-            self._client = None
-            if self._gateway_node:
-                self._gateway_node.is_gateway = False
-                self._gateway_node.update()
-                self._gateway_node = None
+            if client is not self._client:
+                return  # already torn down by us, or a late call from an old client
+            self._forget_connection()
             self.manager.connect_callback(False)
 
         # Try to connect to nodes in order of decreasing RSSI
@@ -148,6 +201,7 @@ class PlejdMesh:
                     BleakClientWithServiceCache,
                     node.bleDevice,
                     node.bleDevice.name,
+                    disconnected_callback=_disconnect,
                     max_attempts=2,
                 )
 
@@ -219,8 +273,16 @@ class PlejdMesh:
         async with self._ble_lock:
             if not await self.connect():
                 return False
-            if not await self._ping(self._client):
+            try:
+                healthy = await self._exchange_ping(self._client)
+                error = None
+            except (BleakError, asyncio.TimeoutError) as e:
+                _LOGGER.warning("Plejd mesh keepalive signal failed: %s", str(e))
+                healthy, error = False, e
+            if not healthy:
+                await self._record_keepalive_failure(error)
                 return False
+            self._consecutive_keepalive_failures = 0
 
         await self.poll()
         await self.poll_buttons()
@@ -232,8 +294,17 @@ class PlejdMesh:
 
         payloads = payload_encode.request_time(self, address)
         await self.write(payloads)
+        if not self.connected:
+            return False
 
-        retval = await self._client.read_gatt_char(gatt.PLEJD_LASTDATA)
+        try:
+            retval = await self._client.read_gatt_char(gatt.PLEJD_LASTDATA)
+        except BleakCharacteristicNotFoundError as e:
+            await self._drop_unhealthy_connection(str(e))
+            return False
+        except (BleakError, asyncio.TimeoutError) as e:
+            _LOGGER.warning("Reading time from plejd mesh failed: %s", str(e))
+            return False
         data = encrypt_decrypt(self._crypto_key, self._gateway_node.BLEaddress, retval)
         ts = int.from_bytes(data[5:9], "little")
         dt = datetime.fromtimestamp(ts)
@@ -274,6 +345,11 @@ class PlejdMesh:
                     await self._client.write_gatt_char(
                         gatt.PLEJD_DATA, payload, response=True
                     )
+        except BleakCharacteristicNotFoundError as e:
+            _LOGGER.warning("Writing to plejd mesh failed: %s", str(e))
+            # Outside the lock: ping() holds it while dropping connections too.
+            await self._drop_unhealthy_connection(str(e))
+            return False
         except (BleakError, asyncio.TimeoutError) as e:
             _LOGGER.warning("Writing to plejd mesh failed: %s", str(e))
             return False
@@ -283,16 +359,18 @@ class PlejdMesh:
         if client is None:
             return False
         try:
-            ping = bytearray(os.urandom(1))
-            _LOGGER.debug("Ping(%s)", int.from_bytes(ping, "little"))
-            await client.write_gatt_char(gatt.PLEJD_PING, ping, response=True)
-            pong = await client.read_gatt_char(gatt.PLEJD_PING)
-            _LOGGER.debug("Pong(%s)", int.from_bytes(pong, "little"))
-            if (ping[0] + 1) & 0xFF == pong[0]:
-                return True
+            return await self._exchange_ping(client)
         except (BleakError, asyncio.TimeoutError) as e:
             _LOGGER.warning("Plejd mesh keepalive signal failed: %s", str(e))
         return False
+
+    async def _exchange_ping(self, client) -> bool:
+        ping = bytearray(os.urandom(1))
+        _LOGGER.debug("Ping(%s)", int.from_bytes(ping, "little"))
+        await client.write_gatt_char(gatt.PLEJD_PING, ping, response=True)
+        pong = await client.read_gatt_char(gatt.PLEJD_PING)
+        _LOGGER.debug("Pong(%s)", int.from_bytes(pong, "little"))
+        return (ping[0] + 1) & 0xFF == pong[0]
 
     async def _relax_connection_params(self, client: BleakClient) -> None:
         """Ask the host stack for a gentler connection interval.
