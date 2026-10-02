@@ -85,10 +85,6 @@ class PlejdManager:
         for d in self.devices:
             if data.address in [d.address, d.rxAddress, 0]:
                 found = True
-                rec_log(
-                    f"DBG-DISPATCH about to call parse_lastdata on "
-                    f"{type(d).__name__} address={d.address} rxAddress={d.rxAddress}"
-                )
                 # A colocated input/output pair (e.g. a CCL-01's built-in
                 # PIR sharing its mesh address with its own light output)
                 # both match here and both get dispatched the same
@@ -102,7 +98,7 @@ class PlejdManager:
                     await d.parse_lastdata(data)
                 except Exception as ex:
                     rec_log(
-                        f"DBG-DISPATCH EXCEPTION in {type(d).__name__} "
+                        f"Exception in {type(d).__name__}.parse_lastdata "
                         f"address={d.address}: {ex!r}"
                     )
 

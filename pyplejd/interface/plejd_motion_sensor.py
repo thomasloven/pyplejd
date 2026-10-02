@@ -42,20 +42,12 @@ class PlejdMotionSensor(PlejdInput):
                 rec_log(f"MOTION {addr=} {button=}", self.address)
                 self.trigger()
             case LastData.CMD_OUTPUT_SET:
-                rec_log(f"DBG-0 entered CMD_OUTPUT_SET case", self.address)
                 for p in data.minipkgs:
-                    is_match = (
+                    if (
                         p.type == MiniPkg.TPE_SOURCE
-                        and bool(p.payload)
+                        and p.payload
                         and p.payload[0] == MiniPkg.SRC_MOTION
-                    )
-                    rec_log(
-                        f"DBG-1 p.type={p.type!r} p.payload={p.payload!r} "
-                        f"TPE_SOURCE={MiniPkg.TPE_SOURCE!r} SRC_MOTION={MiniPkg.SRC_MOTION!r} "
-                        f"is_match={is_match}",
-                        self.address,
-                    )
-                    if is_match:
+                    ):
                         self.trigger()
                     if p.type == MiniPkg.TPE_BATTERYINFO:
                         state["battery"] = int.from_bytes(p.payload, byteorder="big")
@@ -79,26 +71,21 @@ class PlejdMotionSensor(PlejdInput):
                 # notifies HA's listeners (and thus self.trigger()'s state)
                 # never runs, so the motion detection would never reach
                 # Home Assistant despite having been correctly decoded.
-                rec_log(f"DBG-A reached try block", self.address)
                 try:
                     await self._mesh.write(cmd.hex)
-                    rec_log(f"DBG-B write succeeded", self.address)
                 except Exception as ex:
-                    rec_log(f"DBG-C write raised: {ex!r}", self.address)
+                    rec_log(f"Failed to request ambient light level: {ex}", self.address)
             case _:
                 if data.address in [self.address, self.rxAddress]:
                     rec_log(f"Unknown command received: {data.command}", self.address)
                     rec_log(f"    {data.hex}", self.address)
                 return
 
-        rec_log(f"DBG-D about to notify, {len(self._listeners)} listener(s), state={self._state}", self.address)
         for listener in self._listeners:
             listener(self._state)
-        rec_log(f"DBG-E notified", self.address)
         self._state["motion"] = None
 
     def trigger(self):
-        rec_log(f"DBG-T trigger() called", self.address)
         self._state["motion"] = True
         if self.cooldown:
             self.cooldown()

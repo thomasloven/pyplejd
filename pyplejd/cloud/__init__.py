@@ -220,33 +220,26 @@ class PlejdCloudSite:
 
                 # A built-in sensor like the CCL-01's PIR (buttonType
                 # "CCLMotionSensor") shares its physical unit's mesh
-                # address with its colocated output (see inputAddress vs
-                # outputAddress in the site data - both list the same
-                # value for this deviceId), but a detection is reported on
-                # that output's own *response* address, not the plain
-                # address every other input listens on: the mesh's
-                # CMD_OUTPUT_SET/SRC_MOTION report for this deviceId
-                # arrives addressed to rxAddress[deviceId][str(input)],
-                # exactly like the output's own state reports do (see
-                # PlejdCloudSite.outputs above). Hard-coding -1 here (this
-                # property's only previous value) meant that report could
-                # only ever reach this device's colocated PlejdOutput -
-                # never this PlejdInput - so PlejdMotionSensor.trigger()
-                # was unreachable no matter what parse_lastdata did with
-                # it once received. Not every input has an associated
-                # output (a standalone button has no entry in rxAddress at
-                # all), so this still falls back to -1 exactly as before
-                # for anything that isn't one.
-                rxAddress = details.rxAddress.get(deviceId, {}).get(str(input), -1)
+                # address with its colocated output, but a detection is
+                # reported on that output's own *response* address, not
+                # the plain address every other input listens on: the
+                # mesh's CMD_OUTPUT_SET/SRC_MOTION report for this
+                # deviceId arrives addressed to rxAddress[deviceId]["0"]
+                # - keyed by the OUTPUT's own index, not this input's
+                # index. Confirmed live against a real site: this PIR's
+                # own `input` is 1, while rxAddress[deviceId] only has a
+                # "0" key (matching outputAddress[deviceId]["0"], the
+                # device's single light output) - looking it up by
+                # str(input) instead silently falls back to -1 every
+                # time, since input and output indices are unrelated
+                # numbering here. A standalone button has no motionSensor
+                # and no colocated output, so it keeps using its own
+                # str(input) key (falling back to -1 when that's absent
+                # too, exactly as before).
                 if motionSensor:
-                    from ..ble.debug import rec_log
-
-                    rec_log(
-                        f"DBG-RX deviceId={deviceId!r} input={input!r} "
-                        f"rxAddress_table={details.rxAddress.get(deviceId)!r} "
-                        f"outputAddress_table={details.outputAddress.get(deviceId)!r} "
-                        f"-> rxAddress={rxAddress!r}"
-                    )
+                    rxAddress = details.rxAddress.get(deviceId, {}).get("0", -1)
+                else:
+                    rxAddress = details.rxAddress.get(deviceId, {}).get(str(input), -1)
 
                 yield {
                     "address": address,
