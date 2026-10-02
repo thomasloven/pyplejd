@@ -238,6 +238,15 @@ class PlejdCloudSite:
                 # all), so this still falls back to -1 exactly as before
                 # for anything that isn't one.
                 rxAddress = details.rxAddress.get(deviceId, {}).get(str(input), -1)
+                if motionSensor:
+                    from ..ble.debug import rec_log
+
+                    rec_log(
+                        f"DBG-RX deviceId={deviceId!r} input={input!r} "
+                        f"rxAddress_table={details.rxAddress.get(deviceId)!r} "
+                        f"outputAddress_table={details.outputAddress.get(deviceId)!r} "
+                        f"-> rxAddress={rxAddress!r}"
+                    )
 
                 yield {
                     "address": address,
