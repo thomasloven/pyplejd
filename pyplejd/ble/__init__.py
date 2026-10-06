@@ -220,6 +220,8 @@ class PlejdMesh:
             if not await self.connect():
                 return False
             if not await self._ping(self._client):
+                if not await self._ping(self._client):
+                    await self.disconnect()
                 return False
 
         await self.poll()
