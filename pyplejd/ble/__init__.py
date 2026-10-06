@@ -220,9 +220,10 @@ class PlejdMesh:
             if not await self.connect():
                 return False
             if not await self._ping(self._client):
+                await asyncio.sleep(0.5)
                 if not await self._ping(self._client):
                     await self.disconnect()
-                return False
+                    return False
 
         await self.poll()
         await self.poll_buttons()
