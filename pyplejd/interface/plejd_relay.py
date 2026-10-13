@@ -1,5 +1,5 @@
 from .plejd_device import PlejdOutput, PlejdDeviceType
-from ..ble import LastData
+from ..ble import LastData, LightLevel
 from ..ble.debug import rec_log
 
 
@@ -8,6 +8,11 @@ class PlejdRelay(PlejdOutput):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.outputType = PlejdDeviceType.SWITCH
+
+    async def parse_lightlevel(self, level: LightLevel):
+        self._state["state"] = level.state
+        for listener in self._listeners:
+            listener(self._state)
 
     async def parse_lastdata(self, data: LastData):
         state = self._state
