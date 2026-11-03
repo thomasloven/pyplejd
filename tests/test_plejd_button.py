@@ -62,14 +62,19 @@ class PlejdButtonTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(self.events, [{"button": 3, "action": "release"}])
 
-    async def test_unrecognized_payload_lengths_keep_press_behavior(self):
-        for payload in ([39, 1, 11, 0], [39, 1, 28, 11, 1, 0]):
+    async def test_variable_length_payloads_use_final_flag(self):
+        for payload, action in (
+            ([39, 1, 11, 0], "release"),
+            ([39, 1, 28, 11, 1, 0], "release"),
+            ([39, 1, 11, 1], "press"),
+            ([39, 1, 28, 11, 0, 1], "press"),
+        ):
             with self.subTest(payload=payload):
                 self.events.clear()
                 await self.button.parse_lastdata(
                     LastData(command=LastData.CMD_EVENT_FIRED, payload=payload)
                 )
-                self.assertEqual(self.events, [{"button": 1, "action": "press"}])
+                self.assertEqual(self.events, [{"button": 1, "action": action}])
 
     async def test_other_devices_and_inputs_are_ignored(self):
         for payload in ([40, 1, 28, 11, 0], [39, 3, 28, 11, 0]):
