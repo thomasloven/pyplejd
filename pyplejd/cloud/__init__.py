@@ -218,6 +218,29 @@ class PlejdCloudSite:
 
                 room = details.find_room(device.roomId)
 
+                # A built-in sensor like the CCL-01's PIR (buttonType
+                # "CCLMotionSensor") shares its physical unit's mesh
+                # address with its colocated output, but a detection is
+                # reported on that output's own *response* address, not
+                # the plain address every other input listens on: the
+                # mesh's CMD_OUTPUT_SET/SRC_MOTION report for this
+                # deviceId arrives addressed to rxAddress[deviceId]["0"]
+                # - keyed by the OUTPUT's own index, not this input's
+                # index. Confirmed live against a real site: this PIR's
+                # own `input` is 1, while rxAddress[deviceId] only has a
+                # "0" key (matching outputAddress[deviceId]["0"], the
+                # device's single light output) - looking it up by
+                # str(input) instead silently falls back to -1 every
+                # time, since input and output indices are unrelated
+                # numbering here. A standalone button has no motionSensor
+                # and no colocated output, so it keeps using its own
+                # str(input) key (falling back to -1 when that's absent
+                # too, exactly as before).
+                if motionSensor:
+                    rxAddress = details.rxAddress.get(deviceId, {}).get("0", -1)
+                else:
+                    rxAddress = details.rxAddress.get(deviceId, {}).get(str(input), -1)
+
                 yield {
                     "address": address,
                     "deviceAddress": deviceAddress,
@@ -226,7 +249,7 @@ class PlejdCloudSite:
                     "settings": settings,
                     "room": room,
                     "motion": bool(motionSensor),
-                    "rxAddress": -1,
+                    "rxAddress": rxAddress,
                     "first_device": firstDevice,
                 }
 

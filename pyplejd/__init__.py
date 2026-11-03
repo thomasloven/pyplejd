@@ -85,7 +85,22 @@ class PlejdManager:
         for d in self.devices:
             if data.address in [d.address, d.rxAddress, 0]:
                 found = True
-                await d.parse_lastdata(data)
+                # A colocated input/output pair (e.g. a CCL-01's built-in
+                # PIR sharing its mesh address with its own light output)
+                # both match here and both get dispatched the same
+                # LastData. An unhandled exception in one device's
+                # parse_lastdata must not prevent the *other* matching
+                # device(s) further down this loop from ever receiving
+                # it - without this guard, one broken/unlucky handler
+                # silently starves every device after it of updates for
+                # this packet, with nothing in the log to show why.
+                try:
+                    await d.parse_lastdata(data)
+                except Exception as ex:
+                    rec_log(
+                        f"Exception in {type(d).__name__}.parse_lastdata "
+                        f"address={d.address}: {ex!r}"
+                    )
 
         if not found:
             rec_log(f"Unknown command received: {data.command}")

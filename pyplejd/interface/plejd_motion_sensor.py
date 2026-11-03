@@ -18,6 +18,29 @@ class PlejdMotionSensor(PlejdInput):
     async def parse_lastdata(self, data: LastData):
         state = self._state
         match data.command:
+            # CCL-01's built-in PIR is registered on the mesh as an input
+            # (buttonType "CCLMotionSensor", same input-address table as a
+            # regular push button - see PlejdDeviceInputSetting in the site
+            # data), so a detection fires the same CMD_EVENT_FIRED the mesh
+            # uses for button presses, addressed to this device's own
+            # deviceAddress/input pair - not CMD_OUTPUT_SET, which this
+            # class previously (and exclusively) listened for. That left
+            # "motion" permanently unset: CMD_OUTPUT_SET does carry this
+            # device's battery/lux reports, but never a real detection, so
+            # self.trigger() was never reachable. Handling CMD_EVENT_FIRED
+            # here, matched the same way PlejdButton.parse_lastdata does,
+            # is what actually lets a detection reach self.trigger().
+            case LastData.CMD_EVENT_FIRED:
+                addr = int(data.payload[0])
+                button = int(data.payload[1])
+                if not (addr == self.deviceAddress and button == self.settings.input):
+                    return
+                if len(data.payload) == 3 and data.payload[2] == 0:
+                    # "release" - a PIR has no meaningful release edge to
+                    # report; only a fresh detection should (re)trigger.
+                    return
+                rec_log(f"MOTION {addr=} {button=}", self.address)
+                self.trigger()
             case LastData.CMD_OUTPUT_SET:
                 for p in data.minipkgs:
                     if (
@@ -40,7 +63,18 @@ class PlejdMotionSensor(PlejdInput):
                 )
                 cmd.command_type = LastData.CMDT_READ
                 rec_log(f"Write {cmd.hex}", self.address)
-                await self._mesh.write(cmd.hex)
+                # This follow-up read is best-effort: it only refreshes the
+                # lux attribute. A failure here (mesh busy, transient BLE
+                # error) must not swallow the SRC_MOTION detection we just
+                # parsed above - without this guard, an exception here
+                # propagates out of parse_lastdata and the code below that
+                # notifies HA's listeners (and thus self.trigger()'s state)
+                # never runs, so the motion detection would never reach
+                # Home Assistant despite having been correctly decoded.
+                try:
+                    await self._mesh.write(cmd.hex)
+                except Exception as ex:
+                    rec_log(f"Failed to request ambient light level: {ex}", self.address)
             case _:
                 if data.address in [self.address, self.rxAddress]:
                     rec_log(f"Unknown command received: {data.command}", self.address)
