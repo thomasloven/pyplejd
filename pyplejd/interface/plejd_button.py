@@ -21,7 +21,7 @@ class PlejdButton(PlejdInput):
                 if not (addr == self.deviceAddress and button == self.settings.input):
                     return
                 action = "press"
-                if len(data.payload) == 3 and data.payload[2] == 0:
+                if len(data.payload) >= 3 and data.payload[-1] == 0:
                     action = "release"
 
                 rec_log(f"BUTTON {addr=} {button=} {action=}", self.address)
