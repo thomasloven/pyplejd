@@ -72,8 +72,8 @@ class PlejdButton(PlejdInput):
                     self._gesture_level = None
                     return
                 action = "press"
-                # WPH-01 firmware can include two extra bytes before the flag.
-                if len(data.payload) in (3, 5) and data.payload[-1] == 0:
+
+                if len(data.payload) >= 3 and data.payload[-1] == 0:
                     action = "release"
                 self._gesture_pending = action == "press"
                 self._gesture_last_seen = time.monotonic()
