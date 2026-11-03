@@ -15,10 +15,27 @@ class PlejdHardware(MeshDevice):
         self.last_seen = None
         self.rssi = None
 
+        # Filled in by PlejdManager.poll_diagnostics(). None until first polled,
+        # and left alone if a device stops answering so the last known value
+        # stays visible rather than flapping to unknown.
+        self.internal_temperature: int | None = None
+        self.external_temperature: int | None = None
+        self.hardfault: bool | None = None
+        self.diagnostics_updated = None
+
         self._listeners = set()
 
     def __repr__(self):
         return f"PlejdHardware(BLEaddress={self.BLEaddress}, powered={self._powered}, blacklisted={self.blacklisted})"
+
+    @property
+    def powered(self):
+        """True if the unit is mains powered.
+
+        Distinct from connectable: a unit excluded from gateway selection is
+        still perfectly able to answer a read.
+        """
+        return self._powered
 
     @property
     def connectable(self):
