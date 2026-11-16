@@ -8,3 +8,4 @@
 !pyplejd/
 **/__pycache__/
 !compiling.md
+!tests/

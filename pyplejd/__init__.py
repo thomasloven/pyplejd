@@ -85,7 +85,14 @@ class PlejdManager:
         for d in self.devices:
             if data.address in [d.address, d.rxAddress, 0]:
                 found = True
-                await d.parse_lastdata(data)
+                try:
+                    await d.parse_lastdata(data)
+                except Exception:
+                    logging.getLogger(__name__).exception(
+                        "Failed to parse LastData command 0x%04x for device %s",
+                        data.command,
+                        d.address,
+                    )
 
         if not found:
             rec_log(f"Unknown command received: {data.command}")

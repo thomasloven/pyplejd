@@ -41,6 +41,8 @@ class PlejdCover(PlejdOutput):
             listener(self._state)
 
     async def parse_lastdata(self, data: LastData):
+        if not data.payload:
+            return
         state = self._state
         if data.command in [
             LastData.CMD_OUTPUT_STATE_AND_LEVEL,
