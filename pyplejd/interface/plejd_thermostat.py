@@ -87,6 +87,8 @@ class PlejdThermostat(PlejdOutput):
             listener(self._state)
 
     async def parse_lastdata(self, data):
+        if not data.payload:
+            return
         state = self._state
         match data.command:
             case (
