@@ -165,7 +165,7 @@ class TemperatureLimits(BaseModel):
 
 
 class PWMRegulationConfig(BaseModel):
-    interval: int
+    interval: int  # PWM period in minutes (not duty cycle step size)
     minDuty: int
     maxDuty: int
     minDutyUserInput: int
