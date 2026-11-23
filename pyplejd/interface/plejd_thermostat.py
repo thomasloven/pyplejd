@@ -32,7 +32,6 @@ class PlejdThermostat(PlejdOutput):
             self.limits = {
                 "min": self.settings.climateSettings.pwmRegulationConfig.minDutyUserInput,
                 "max": self.settings.climateSettings.pwmRegulationConfig.maxDutyUserInput,
-                "step": self.settings.climateSettings.pwmRegulationConfig.interval,
             }
             self.outputType = PlejdDeviceType.PWM
             self.regulation_mode = "PWM"
